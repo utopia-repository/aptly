@@ -1,0 +1,6 @@
+  Arch   | Package                                  | Version in A                             | Version in B
++ all    | init-system-helpers                      | -                                        | 1.11~bpo70.1
+! amd64  | libestr0                                 | 0.1.1-2                                  | 0.1.9-1~bpo70+1
+! amd64  | rsyslog                                  | 5.8.11-3                                 | 7.4.4-1~bpo70+1
+! i386   | libestr0                                 | 0.1.1-2                                  | 0.1.9-1~bpo70+1
+! i386   | rsyslog                                  | 5.8.11-3                                 | 7.4.4-1~bpo70+1
