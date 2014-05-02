@@ -10,7 +10,7 @@ Vcs-Browser: https://github.com/smira/aptly/
 
 Package: aptly
 Architecture: any
-Depends: golang-go (>= 1.1), ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Swiss army knife for Debian repository management
  It offers several features making it easy to manage Debian package
  repositories:
