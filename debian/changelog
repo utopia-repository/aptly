@@ -1,3 +1,10 @@
+aptly (0.5-4) unstable; urgency=medium
+
+  * Collect licenses by going over files one by one
+  * Use packaged golang-go.tools
+
+ -- Sebastien Delafond <seb@debian.org>  Thu, 10 Jul 2014 00:49:09 +0200
+
 aptly (0.5-3) unstable; urgency=low
 
   * Licensing:

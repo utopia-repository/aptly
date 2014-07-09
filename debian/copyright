@@ -42,25 +42,9 @@ Files: _vendor/src/github.com/syndtr/goleveldb/leveldb/util/buffer*.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: _vendor/src/code.google.com/p/go.crypto/* _vendor/src/code.google.com/p/go.tools/* _vendor/src/github.com/smira/flag/* _vendor/src/github.com/golang/lint/* _vendor/src/code.google.com/p/gographviz/scanner/scanner.go
+Files: _vendor/src/code.google.com/p/go.crypto/* _vendor/src/github.com/smira/flag/* _vendor/src/github.com/golang/lint/* _vendor/src/code.google.com/p/gographviz/scanner/scanner.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
-
-Files: _vendor/src/code.google.com/p/go.tools/godoc/static/godoc.html
-License: CC-BY-3.0
-
-Files: _vendor/src/code.google.com/p/go.tools/godoc/static/jquery.js
-Copyright: 2005, 2014 jQuery Foundation and other contributors
-License: MIT
-
-Files: _vendor/src/code.google.com/p/go.tools/godoc/static/jquery.treeview.js
-Copyright: 2007 Jörn Zaefferer
-License: Dual MIT and GPL
- See: /usr/share/common-licenses/GPL-1
-
-Files: _vendor/src/code.google.com/p/go.tools/godoc/static/static.go
-Copyright: 2009 The Go Authors
-License: CC-BY-3.0
 
 Files: _vendor/src/code.google.com/p/go-uuid/uuid/*
 Copyright: 2009 Google Inc.
