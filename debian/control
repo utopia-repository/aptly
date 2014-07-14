@@ -5,8 +5,8 @@ Maintainer: Sebastien Delafond <seb@debian.org>
 Build-Depends: debhelper (>= 9.0.0), golang (>= 1.1), golang-go.tools
 Standards-Version: 3.9.5
 Homepage: http://www.aptly.info
-Vcs-Git: https://github.com/smira/aptly.git
-Vcs-Browser: https://github.com/smira/aptly/
+Vcs-Git: git://anonscm.debian.org/collab-maint/aptly.git
+Vcs-Browser: http://anonscm.debian.org/git/collab-maint/aptly.git
 
 Package: aptly
 Architecture: any
