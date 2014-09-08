@@ -61,7 +61,7 @@ License: BSD-3-clause
 
 Files: _vendor/src/github.com/axw/gocov/*
 Copyright: 2012 The Gocov Authors
-License: BSD-3-clause
+License: MIT
 
 Files: _vendor/src/github.com/mattn/goveralls/*
 Copyright: 2013-2014 Yasuhiro Matsumoto
