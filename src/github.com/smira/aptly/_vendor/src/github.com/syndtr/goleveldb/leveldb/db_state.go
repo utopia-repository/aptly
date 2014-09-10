@@ -25,7 +25,7 @@ func (d *DB) addSeq(delta uint64) {
 
 // Create new memdb and froze the old one; need external synchronization.
 // newMem only called synchronously by the writer.
-func (d *DB) newMem() (mem *memdb.DB, err error) {
+func (d *DB) newMem(n int) (mem *memdb.DB, err error) {
 	s := d.s
 
 	num := s.allocFileNum()
@@ -46,7 +46,7 @@ func (d *DB) newMem() (mem *memdb.DB, err error) {
 	d.journalWriter = w
 	d.journalFile = file
 	d.frozenMem = d.mem
-	d.mem = memdb.New(s.cmp, toPercent(d.s.o.GetWriteBuffer(), kWriteBufferPercent))
+	d.mem = memdb.New(s.cmp, maxInt(d.s.o.GetWriteBuffer(), n))
 	mem = d.mem
 	// The seq only incremented by the writer.
 	d.frozenSeq = d.seq
@@ -85,7 +85,11 @@ func (d *DB) getFrozenMem() *memdb.DB {
 // Drop frozen memdb; assume that frozen memdb isn't nil.
 func (d *DB) dropFrozenMem() {
 	d.memMu.Lock()
-	d.frozenJournalFile.Remove()
+	if err := d.frozenJournalFile.Remove(); err != nil {
+		d.s.logf("journal@remove removing @%d %q", d.frozenJournalFile.Num(), err)
+	} else {
+		d.s.logf("journal@remove removed @%d", d.frozenJournalFile.Num())
+	}
 	d.frozenJournalFile = nil
 	d.frozenMem = nil
 	d.memMu.Unlock()

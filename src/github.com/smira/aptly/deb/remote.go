@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,10 @@ type RemoteRepo struct {
 	LastDownloadDate time.Time
 	// Checksums for release files
 	ReleaseFiles map[string]utils.ChecksumInfo
+	// Filter for packages
+	Filter string
+	// FilterWithDeps to include dependencies from filter query
+	FilterWithDeps bool
 	// "Snapshot" of current list of packages
 	packageRefs *PackageRefList
 	// Parsed archived root
@@ -66,9 +71,11 @@ func NewRemoteRepo(name string, archiveRoot string, distribution string, compone
 		return nil, err
 	}
 
-	if result.Distribution == "." || result.Distribution == "./" {
+	if strings.HasSuffix(result.Distribution, "/") || strings.HasPrefix(result.Distribution, ".") {
 		// flat repo
-		result.Distribution = ""
+		if !strings.HasPrefix(result.Distribution, ".") {
+			result.Distribution = "./" + result.Distribution
+		}
 		result.Architectures = nil
 		if len(result.Components) > 0 {
 			return nil, fmt.Errorf("components aren't supported for flat repos")
@@ -106,7 +113,9 @@ func (repo *RemoteRepo) String() string {
 
 // IsFlat determines if repository is flat
 func (repo *RemoteRepo) IsFlat() bool {
-	return repo.Distribution == ""
+	// aptly < 0.5.1 had Distribution = "" for flat repos
+	// aptly >= 0.5.1 had Distribution = "./[path]/" for flat repos
+	return repo.Distribution == "" || (strings.HasPrefix(repo.Distribution, ".") && strings.HasSuffix(repo.Distribution, "/"))
 }
 
 // NumPackages return number of packages retrived from remote repo
@@ -129,7 +138,7 @@ func (repo *RemoteRepo) ReleaseURL(name string) *url.URL {
 	if !repo.IsFlat() {
 		path = &url.URL{Path: fmt.Sprintf("dists/%s/%s", repo.Distribution, name)}
 	} else {
-		path = &url.URL{Path: name}
+		path = &url.URL{Path: filepath.Join(repo.Distribution, name)}
 	}
 
 	return repo.archiveRootURL.ResolveReference(path)
@@ -137,13 +146,13 @@ func (repo *RemoteRepo) ReleaseURL(name string) *url.URL {
 
 // FlatBinaryURL returns URL to Packages files for flat repo
 func (repo *RemoteRepo) FlatBinaryURL() *url.URL {
-	path := &url.URL{Path: "Packages"}
+	path := &url.URL{Path: filepath.Join(repo.Distribution, "Packages")}
 	return repo.archiveRootURL.ResolveReference(path)
 }
 
 // FlatSourcesURL returns URL to Sources files for flat repo
 func (repo *RemoteRepo) FlatSourcesURL() *url.URL {
-	path := &url.URL{Path: "Sources"}
+	path := &url.URL{Path: filepath.Join(repo.Distribution, "Sources")}
 	return repo.archiveRootURL.ResolveReference(path)
 }
 
@@ -315,7 +324,8 @@ ok:
 }
 
 // Download downloads all repo files
-func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, collectionFactory *CollectionFactory, packagePool aptly.PackagePool, ignoreMismatch bool) error {
+func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, collectionFactory *CollectionFactory,
+	packagePool aptly.PackagePool, ignoreMismatch bool, dependencyOptions int, filterQuery PackageQuery) error {
 	list := NewPackageList()
 
 	progress.Printf("Downloading & parsing package files...\n")
@@ -388,6 +398,25 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 		progress.ShutdownBar()
 	}
 
+	var err error
+
+	if repo.Filter != "" {
+		progress.Printf("Applying filter...\n")
+
+		list.PrepareIndex()
+
+		emptyList := NewPackageList()
+		emptyList.PrepareIndex()
+
+		origPackages := list.Len()
+		list, err = list.Filter([]PackageQuery{filterQuery}, repo.FilterWithDeps, emptyList, dependencyOptions, repo.Architectures)
+		if err != nil {
+			return err
+		}
+
+		progress.Printf("Packages filtered: %d -> %d.\n", origPackages, list.Len())
+	}
+
 	progress.Printf("Building download queue...\n")
 
 	// Build download queue
@@ -395,7 +424,7 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 	count := 0
 	downloadSize := int64(0)
 
-	err := list.ForEach(func(p *Package) error {
+	err = list.ForEach(func(p *Package) error {
 		list, err2 := p.DownloadList(packagePool)
 		if err2 != nil {
 			return err2
@@ -473,7 +502,43 @@ func (repo *RemoteRepo) Decode(input []byte) error {
 	decoder := codec.NewDecoderBytes(input, &codec.MsgpackHandle{})
 	err := decoder.Decode(repo)
 	if err != nil {
-		return err
+		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") {
+			// probably it is broken DB from go < 1.2, try decoding w/o time.Time
+			var repo11 struct {
+				UUID             string
+				Name             string
+				ArchiveRoot      string
+				Distribution     string
+				Components       []string
+				Architectures    []string
+				DownloadSources  bool
+				Meta             Stanza
+				LastDownloadDate []byte
+				ReleaseFiles     map[string]utils.ChecksumInfo
+				Filter           string
+				FilterWithDeps   bool
+			}
+
+			decoder = codec.NewDecoderBytes(input, &codec.MsgpackHandle{})
+			err2 := decoder.Decode(&repo11)
+			if err2 != nil {
+				return err
+			}
+
+			repo.UUID = repo11.UUID
+			repo.Name = repo11.Name
+			repo.ArchiveRoot = repo11.ArchiveRoot
+			repo.Distribution = repo11.Distribution
+			repo.Components = repo11.Components
+			repo.Architectures = repo11.Architectures
+			repo.DownloadSources = repo11.DownloadSources
+			repo.Meta = repo11.Meta
+			repo.ReleaseFiles = repo11.ReleaseFiles
+			repo.Filter = repo11.Filter
+			repo.FilterWithDeps = repo11.FilterWithDeps
+		} else {
+			return err
+		}
 	}
 	return repo.prepare()
 }

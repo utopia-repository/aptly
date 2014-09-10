@@ -7,6 +7,7 @@ import (
 	. "launchpad.net/gocheck"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 type PackageSuite struct {
@@ -87,8 +88,19 @@ func (s *PackageSuite) TestWithProvides(c *C) {
 func (s *PackageSuite) TestKey(c *C) {
 	p := NewPackageFromControlFile(s.stanza)
 
+	c.Check(p.Key(""), DeepEquals, []byte("Pi386 alien-arena-common 7.40-2 c8901eedd79ac51b"))
+	c.Check(p.Key("xD"), DeepEquals, []byte("xDPi386 alien-arena-common 7.40-2 c8901eedd79ac51b"))
+
+	p.V06Plus = false
 	c.Check(p.Key(""), DeepEquals, []byte("Pi386 alien-arena-common 7.40-2"))
 	c.Check(p.Key("xD"), DeepEquals, []byte("xDPi386 alien-arena-common 7.40-2"))
+}
+
+func (s *PackageSuite) TestShortKey(c *C) {
+	p := NewPackageFromControlFile(s.stanza)
+
+	c.Check(p.ShortKey(""), DeepEquals, []byte("Pi386 alien-arena-common 7.40-2"))
+	c.Check(p.ShortKey("xD"), DeepEquals, []byte("xDPi386 alien-arena-common 7.40-2"))
 }
 
 func (s *PackageSuite) TestStanza(c *C) {
@@ -106,6 +118,58 @@ func (s *PackageSuite) TestStanza(c *C) {
 func (s *PackageSuite) TestString(c *C) {
 	p := NewPackageFromControlFile(s.stanza)
 	c.Assert(p.String(), Equals, "alien-arena-common_7.40-2_i386")
+}
+
+func (s *PackageSuite) TestGetField(c *C) {
+	p := NewPackageFromControlFile(s.stanza.Copy())
+
+	stanza2 := s.stanza.Copy()
+	delete(stanza2, "Source")
+	stanza2["Provides"] = "app, game"
+	p2 := NewPackageFromControlFile(stanza2)
+
+	stanza3 := s.stanza.Copy()
+	stanza3["Source"] = "alien-arena (3.5)"
+	p3 := NewPackageFromControlFile(stanza3)
+
+	p4, _ := NewSourcePackageFromControlFile(s.sourceStanza.Copy())
+
+	c.Check(p.GetField("$Source"), Equals, "alien-arena")
+	c.Check(p2.GetField("$Source"), Equals, "alien-arena-common")
+	c.Check(p3.GetField("$Source"), Equals, "alien-arena")
+	c.Check(p4.GetField("$Source"), Equals, "")
+
+	c.Check(p.GetField("$SourceVersion"), Equals, "7.40-2")
+	c.Check(p2.GetField("$SourceVersion"), Equals, "7.40-2")
+	c.Check(p3.GetField("$SourceVersion"), Equals, "3.5")
+	c.Check(p4.GetField("$SourceVersion"), Equals, "")
+
+	c.Check(p.GetField("$Architecture"), Equals, "i386")
+	c.Check(p4.GetField("$Architecture"), Equals, "source")
+
+	c.Check(p.GetField("$PackageType"), Equals, "deb")
+	c.Check(p4.GetField("$PackageType"), Equals, "source")
+
+	c.Check(p.GetField("Name"), Equals, "alien-arena-common")
+	c.Check(p4.GetField("Name"), Equals, "access-modifier-checker")
+
+	c.Check(p.GetField("Architecture"), Equals, "i386")
+	c.Check(p4.GetField("Architecture"), Equals, "all")
+
+	c.Check(p.GetField("Version"), Equals, "7.40-2")
+
+	c.Check(p.GetField("Source"), Equals, "alien-arena")
+	c.Check(p2.GetField("Source"), Equals, "")
+	c.Check(p3.GetField("Source"), Equals, "alien-arena (3.5)")
+	c.Check(p4.GetField("Source"), Equals, "")
+
+	c.Check(p.GetField("Depends"), Equals, "libc6 (>= 2.7), alien-arena-data (>= 7.40)")
+
+	c.Check(p.GetField("Provides"), Equals, "")
+	c.Check(p2.GetField("Provides"), Equals, "app, game")
+
+	c.Check(p.GetField("Section"), Equals, "contrib/games")
+	c.Check(p.GetField("Priority"), Equals, "extra")
 }
 
 func (s *PackageSuite) TestEquals(c *C) {
@@ -163,6 +227,9 @@ func (s *PackageSuite) TestMatchesDependency(c *C) {
 	// exact match
 	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionEqual, Version: "7.40-2"}), Equals, true)
 
+	// exact match, same version, no revision specified
+	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionEqual, Version: "7.40"}), Equals, false)
+
 	// different name
 	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena", Architecture: "i386", Relation: VersionEqual, Version: "7.40-2"}), Equals, false)
 
@@ -193,6 +260,29 @@ func (s *PackageSuite) TestMatchesDependency(c *C) {
 	// <=
 	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionLessOrEqual, Version: "7.40-2"}), Equals, true)
 	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionLessOrEqual, Version: "7.40-1"}), Equals, false)
+
+	// %
+	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionPatternMatch, Version: "7.40-*"}), Equals, true)
+	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionPatternMatch, Version: "7.40-[2]"}), Equals, true)
+	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionPatternMatch, Version: "7.40-[2"}), Equals, false)
+	c.Check(p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionPatternMatch, Version: "7.40-[34]"}), Equals, false)
+
+	// ~
+	c.Check(
+		p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionRegexp, Version: "7\\.40-.*",
+			Regexp: regexp.MustCompile("7\\.40-.*")}), Equals, true)
+	c.Check(
+		p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionRegexp, Version: "7\\.40-.*",
+			Regexp: regexp.MustCompile("40")}), Equals, true)
+	c.Check(
+		p.MatchesDependency(Dependency{Pkg: "alien-arena-common", Architecture: "i386", Relation: VersionRegexp, Version: "7\\.40-.*",
+			Regexp: regexp.MustCompile("39-.*")}), Equals, false)
+
+	// Provides
+	c.Check(p.MatchesDependency(Dependency{Pkg: "game", Relation: VersionDontCare}), Equals, false)
+	p.Provides = []string{"fun", "game"}
+	c.Check(p.MatchesDependency(Dependency{Pkg: "game", Relation: VersionDontCare}), Equals, true)
+	c.Check(p.MatchesDependency(Dependency{Pkg: "game", Architecture: "amd64", Relation: VersionDontCare}), Equals, false)
 }
 
 func (s *PackageSuite) TestGetDependencies(c *C) {
@@ -231,6 +321,12 @@ func (s *PackageSuite) TestPoolDirectory(c *C) {
 	c.Check(dir, Equals, "liba/libarena")
 
 	p = NewPackageFromControlFile(packageStanza.Copy())
+	p.Source = "gcc-defaults (1.77)"
+	dir, err = p.PoolDirectory()
+	c.Check(err, IsNil)
+	c.Check(dir, Equals, "g/gcc-defaults")
+
+	p = NewPackageFromControlFile(packageStanza.Copy())
 	p.Source = "l"
 	_, err = p.PoolDirectory()
 	c.Check(err, ErrorMatches, ".* too short")
@@ -249,13 +345,13 @@ func (s *PackageSuite) TestLinkFromPool(c *C) {
 	c.Assert(err, IsNil)
 	file.Close()
 
-	err = p.LinkFromPool(publishedStorage, packagePool, "", "non-free")
+	err = p.LinkFromPool(publishedStorage, packagePool, "", "non-free", false)
 	c.Check(err, IsNil)
 	c.Check(p.Files()[0].Filename, Equals, "alien-arena-common_7.40-2_i386.deb")
 	c.Check(p.Files()[0].downloadPath, Equals, "pool/non-free/a/alien-arena")
 
 	p.IsSource = true
-	err = p.LinkFromPool(publishedStorage, packagePool, "", "non-free")
+	err = p.LinkFromPool(publishedStorage, packagePool, "", "non-free", false)
 	c.Check(err, IsNil)
 	c.Check(p.Extra()["Directory"], Equals, "pool/non-free/a/alien-arena")
 }

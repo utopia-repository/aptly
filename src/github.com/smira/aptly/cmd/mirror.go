@@ -54,6 +54,8 @@ func makeCmdMirror() *commander.Command {
 			makeCmdMirrorShow(),
 			makeCmdMirrorDrop(),
 			makeCmdMirrorUpdate(),
+			makeCmdMirrorRename(),
+			makeCmdMirrorEdit(),
 		},
 	}
 }

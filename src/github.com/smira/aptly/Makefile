@@ -1,6 +1,6 @@
 GOVERSION=$(shell go version | awk '{print $$3;}')
-PACKAGES=database deb files http utils
-ALL_PACKAGES=aptly cmd console database deb files http utils
+PACKAGES=database deb files http query s3 utils
+ALL_PACKAGES=aptly cmd console database deb files http query s3 utils
 BINPATH=$(abspath ./_vendor/bin)
 GOM_ENVIRONMENT=-test
 PYTHON?=python
@@ -43,9 +43,7 @@ install:
 	$(GOM) build -o $(BINPATH)/aptly
 
 system-test: install
-ifeq ($(GOVERSION),$(filter $(GOVERSION),go1.2 go1.2.1 devel))
 	if [ ! -e ~/aptly-fixture-db ]; then git clone https://github.com/aptly-dev/aptly-fixture-db.git ~/aptly-fixture-db/; fi
-endif
 	if [ ! -e ~/aptly-fixture-pool ]; then git clone https://github.com/aptly-dev/aptly-fixture-pool.git ~/aptly-fixture-pool/; fi
 	PATH=$(BINPATH)/:$(PATH) $(PYTHON) system/run.py --long
 
@@ -69,7 +67,17 @@ package:
 	(cd root/etc/bash_completion.d && wget https://raw.github.com/aptly-dev/aptly-bash-completion/master/aptly)
 	gzip root/usr/share/man/man1/aptly.1
 	fpm -s dir -t deb -n aptly -v $(VERSION) --url=http://www.aptly.info/ --license=MIT --vendor="Andrey Smirnov <me@smira.ru>" \
-	   -f -m "Andrey Smirnov <me@smira.ru>" --description="Debian repository management tool" -C root/ .
+	   -f -m "Andrey Smirnov <me@smira.ru>" --description="Debian repository management tool" --deb-recommends bzip2 -C root/ .
 	mv aptly_$(VERSION)_*.deb ~
+
+src-package:
+	rm -rf aptly-$(VERSION)
+	mkdir -p aptly-$(VERSION)/src/github.com/smira/aptly/
+	cd aptly-$(VERSION)/src/github.com/smira/ && git clone https://github.com/smira/aptly && cd aptly && git checkout v$(VERSION)
+	cd aptly-$(VERSION)/src/github.com/smira/aptly && gom -production install
+	cd aptly-$(VERSION)/src/github.com/smira/aptly && find . \( -name .git -o -name .bzr -o -name .hg \) -print | xargs rm -rf
+	rm -rf aptly-$(VERSION)/src/github.com/smira/aptly/_vendor/{pkg,bin}
+	tar cyf aptly-$(VERSION)-src.tar.bz2 aptly-$(VERSION)
+	rm -rf aptly-$(VERSION)
 
 .PHONY: coverage.out

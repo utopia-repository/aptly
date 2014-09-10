@@ -26,6 +26,8 @@ type Package struct {
 	IsSource bool
 	// Hash of files section
 	FilesHash uint64
+	// Is this >= 0.6 package?
+	V06Plus bool
 	// Offload fields
 	deps  *PackageDependencies
 	extra *Stanza
@@ -41,6 +43,7 @@ func NewPackageFromControlFile(input Stanza) *Package {
 		Version:      input["Version"],
 		Architecture: input["Architecture"],
 		Source:       input["Source"],
+		V06Plus:      true,
 	}
 
 	delete(input, "Package")
@@ -89,6 +92,7 @@ func NewSourcePackageFromControlFile(input Stanza) (*Package, error) {
 		Version:            input["Version"],
 		Architecture:       "source",
 		SourceArchitecture: input["Architecture"],
+		V06Plus:            true,
 	}
 
 	delete(input, "Package")
@@ -167,12 +171,85 @@ func NewSourcePackageFromControlFile(input Stanza) (*Package, error) {
 
 // Key returns unique key identifying package
 func (p *Package) Key(prefix string) []byte {
-	return []byte(prefix + "P" + p.Architecture + " " + p.Name + " " + p.Version)
+	if p.V06Plus {
+		return []byte(fmt.Sprintf("%sP%s %s %s %08x", prefix, p.Architecture, p.Name, p.Version, p.FilesHash))
+	}
+
+	return p.ShortKey(prefix)
+}
+
+// ShortKey returns key for the package that should be unique in one list
+func (p *Package) ShortKey(prefix string) []byte {
+	return []byte(fmt.Sprintf("%sP%s %s %s", prefix, p.Architecture, p.Name, p.Version))
 }
 
 // String creates readable representation
 func (p *Package) String() string {
 	return fmt.Sprintf("%s_%s_%s", p.Name, p.Version, p.Architecture)
+}
+
+// GetField returns fields from package
+func (p *Package) GetField(name string) string {
+	switch name {
+	// $Version is handled in FieldQuery
+	case "$Source":
+		if p.IsSource {
+			return ""
+		}
+		source := p.Source
+		if source == "" {
+			return p.Name
+		} else if pos := strings.Index(source, "("); pos != -1 {
+			return strings.TrimSpace(source[:pos])
+		}
+		return source
+	case "$SourceVersion":
+		if p.IsSource {
+			return ""
+		}
+		source := p.Source
+		if pos := strings.Index(source, "("); pos != -1 {
+			if pos2 := strings.LastIndex(source, ")"); pos2 != -1 && pos2 > pos {
+				return strings.TrimSpace(source[pos+1 : pos2])
+			}
+		}
+		return p.Version
+	case "$Architecture":
+		return p.Architecture
+	case "$PackageType":
+		if p.IsSource {
+			return "source"
+		}
+		return "deb"
+	case "Name":
+		return p.Name
+	case "Version":
+		return p.Version
+	case "Architecture":
+		if p.IsSource {
+			return p.SourceArchitecture
+		}
+		return p.Architecture
+	case "Source":
+		return p.Source
+	case "Depends":
+		return strings.Join(p.Deps().Depends, ", ")
+	case "Pre-Depends":
+		return strings.Join(p.Deps().PreDepends, ", ")
+	case "Suggests":
+		return strings.Join(p.Deps().Suggests, ", ")
+	case "Recommends":
+		return strings.Join(p.Deps().Recommends, ", ")
+	case "Provides":
+		return strings.Join(p.Provides, ", ")
+	case "Build-Depends":
+		return strings.Join(p.Deps().BuildDepends, ", ")
+	case "Build-Depends-Indep":
+		return strings.Join(p.Deps().BuildDependsInDep, ", ")
+	default:
+		return p.Extra()[name]
+	}
+	return ""
 }
 
 // MatchesArchitecture checks whether packages matches specified architecture
@@ -186,19 +263,23 @@ func (p *Package) MatchesArchitecture(arch string) bool {
 
 // MatchesDependency checks whether package matches specified dependency
 func (p *Package) MatchesDependency(dep Dependency) bool {
-	if dep.Pkg != p.Name {
-		return false
-	}
-
 	if dep.Architecture != "" && !p.MatchesArchitecture(dep.Architecture) {
 		return false
 	}
 
 	if dep.Relation == VersionDontCare {
-		return true
+		if utils.StrSliceHasItem(p.Provides, dep.Pkg) {
+			return true
+		}
+		return dep.Pkg == p.Name
+	}
+
+	if dep.Pkg != p.Name {
+		return false
 	}
 
 	r := CompareVersions(p.Version, dep.Version)
+
 	switch dep.Relation {
 	case VersionEqual:
 		return r == 0
@@ -210,6 +291,11 @@ func (p *Package) MatchesDependency(dep Dependency) bool {
 		return r <= 0
 	case VersionGreaterOrEqual:
 		return r >= 0
+	case VersionPatternMatch:
+		matched, err := filepath.Match(dep.Version, p.Version)
+		return err == nil && matched
+	case VersionRegexp:
+		return dep.Regexp.FindStringIndex(p.Version) != nil
 	}
 
 	panic("unknown relation")
@@ -376,7 +462,8 @@ func (p *Package) Equals(p2 *Package) bool {
 }
 
 // LinkFromPool links package file from pool to dist's pool location
-func (p *Package) LinkFromPool(publishedStorage aptly.PublishedStorage, packagePool aptly.PackagePool, prefix string, component string) error {
+func (p *Package) LinkFromPool(publishedStorage aptly.PublishedStorage, packagePool aptly.PackagePool,
+	prefix, component string, force bool) error {
 	poolDir, err := p.PoolDirectory()
 	if err != nil {
 		return err
@@ -391,7 +478,7 @@ func (p *Package) LinkFromPool(publishedStorage aptly.PublishedStorage, packageP
 		relPath := filepath.Join("pool", component, poolDir)
 		publishedDirectory := filepath.Join(prefix, relPath)
 
-		err = publishedStorage.LinkFromPool(publishedDirectory, packagePool, sourcePath)
+		err = publishedStorage.LinkFromPool(publishedDirectory, packagePool, sourcePath, f.Checksums.MD5, force)
 		if err != nil {
 			return err
 		}
@@ -411,6 +498,8 @@ func (p *Package) PoolDirectory() (string, error) {
 	source := p.Source
 	if source == "" {
 		source = p.Name
+	} else if pos := strings.Index(source, "("); pos != -1 {
+		source = strings.TrimSpace(source[:pos])
 	}
 
 	if len(source) < 2 {

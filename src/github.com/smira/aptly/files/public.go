@@ -1,10 +1,12 @@
 package files
 
 import (
+	"fmt"
 	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/utils"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // PublishedStorage abstract file system with public dirs (published repos)
@@ -12,9 +14,10 @@ type PublishedStorage struct {
 	rootPath string
 }
 
-// Check interface
+// Check interfaces
 var (
-	_ aptly.PublishedStorage = (*PublishedStorage)(nil)
+	_ aptly.PublishedStorage      = (*PublishedStorage)(nil)
+	_ aptly.LocalPublishedStorage = (*PublishedStorage)(nil)
 )
 
 // NewPublishedStorage creates new instance of PublishedStorage which specified root
@@ -32,9 +35,26 @@ func (storage *PublishedStorage) MkDir(path string) error {
 	return os.MkdirAll(filepath.Join(storage.rootPath, path), 0755)
 }
 
-// CreateFile creates file for writing under public path
-func (storage *PublishedStorage) CreateFile(path string) (*os.File, error) {
-	return os.Create(filepath.Join(storage.rootPath, path))
+// PutFile puts file into published storage at specified path
+func (storage *PublishedStorage) PutFile(path string, sourceFilename string) error {
+	var (
+		source, f *os.File
+		err       error
+	)
+	source, err = os.Open(sourceFilename)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	f, err = os.Create(filepath.Join(storage.rootPath, path))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, source)
+	return err
 }
 
 // Remove removes single file under public path
@@ -59,7 +79,8 @@ func (storage *PublishedStorage) RemoveDirs(path string, progress aptly.Progress
 // sourcePath is filepath to package file in package pool
 //
 // LinkFromPool returns relative path for the published file to be included in package index
-func (storage *PublishedStorage) LinkFromPool(publishedDirectory string, sourcePool aptly.PackagePool, sourcePath string) error {
+func (storage *PublishedStorage) LinkFromPool(publishedDirectory string, sourcePool aptly.PackagePool,
+	sourcePath, sourceMD5 string, force bool) error {
 	// verify that package pool is local pool is filesystem pool
 	_ = sourcePool.(*PackagePool)
 
@@ -71,11 +92,38 @@ func (storage *PublishedStorage) LinkFromPool(publishedDirectory string, sourceP
 		return err
 	}
 
-	_, err = os.Stat(filepath.Join(poolPath, baseName))
-	if err == nil { // already exists, skip
-		return nil
+	var dstStat, srcStat os.FileInfo
+
+	dstStat, err = os.Stat(filepath.Join(poolPath, baseName))
+	if err == nil {
+		// already exists, check source file
+		srcStat, err = os.Stat(sourcePath)
+		if err != nil {
+			// source file doesn't exist? problem!
+			return err
+		}
+
+		srcSys := srcStat.Sys().(*syscall.Stat_t)
+		dstSys := dstStat.Sys().(*syscall.Stat_t)
+
+		// source and destination inodes match, no need to link
+		if srcSys.Ino == dstSys.Ino {
+			return nil
+		}
+
+		// source and destination have different inodes, if !forced, this is fatal error
+		if !force {
+			return fmt.Errorf("error linking file to %s: file already exists and is different", filepath.Join(poolPath, baseName))
+		}
+
+		// forced, so remove destination
+		err = os.Remove(filepath.Join(poolPath, baseName))
+		if err != nil {
+			return err
+		}
 	}
 
+	// destination doesn't exist (or forced), create link
 	return os.Link(sourcePath, filepath.Join(poolPath, baseName))
 }
 
@@ -94,12 +142,12 @@ func (storage *PublishedStorage) Filelist(prefix string) ([]string, error) {
 		return nil
 	})
 
-	return result, err
-}
+	if err != nil && os.IsNotExist(err) {
+		// file path doesn't exist, consider it empty
+		return []string{}, nil
+	}
 
-// ChecksumsForFile proxies requests to utils.ChecksumsForFile, joining public path
-func (storage *PublishedStorage) ChecksumsForFile(path string) (utils.ChecksumInfo, error) {
-	return utils.ChecksumsForFile(filepath.Join(storage.rootPath, path))
+	return result, err
 }
 
 // RenameFile renames (moves) file

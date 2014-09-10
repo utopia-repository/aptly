@@ -9,17 +9,19 @@ func aptlyPublishDrop(cmd *commander.Command, args []string) error {
 	var err error
 	if len(args) < 1 || len(args) > 2 {
 		cmd.Usage()
-		return err
+		return commander.ErrCommandError
 	}
 
 	distribution := args[0]
-	prefix := "."
+	param := "."
 
 	if len(args) == 2 {
-		prefix = args[1]
+		param = args[1]
 	}
 
-	err = context.CollectionFactory().PublishedRepoCollection().Remove(context.PublishedStorage(), prefix, distribution,
+	storage, prefix := parsePrefix(param)
+
+	err = context.CollectionFactory().PublishedRepoCollection().Remove(context, storage, prefix, distribution,
 		context.CollectionFactory(), context.Progress())
 	if err != nil {
 		return fmt.Errorf("unable to remove: %s", err)
@@ -33,11 +35,11 @@ func aptlyPublishDrop(cmd *commander.Command, args []string) error {
 func makeCmdPublishDrop() *commander.Command {
 	cmd := &commander.Command{
 		Run:       aptlyPublishDrop,
-		UsageLine: "drop <distribution> [<prefix>]",
+		UsageLine: "drop <distribution> [[<endpoint>:]<prefix>]",
 		Short:     "remove published repository",
 		Long: `
-Command removes whatever has been published under specified <prefix> and
-<distribution> name.
+Command removes whatever has been published under specified <prefix>,
+publishing <endpoint> and <distribution> name.
 
 Example:
 

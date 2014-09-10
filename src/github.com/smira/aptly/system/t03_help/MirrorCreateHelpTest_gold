@@ -1,7 +1,8 @@
 Usage: aptly mirror create <name> <archive url> <distribution> [<component1> ...]
 
 Creates mirror <name> of remote repository, aptly supports both regular and flat Debian repositories exported
-via HTTP. aptly would try download Release file from remote repository and verify its' signature.
+via HTTP. aptly would try download Release file from remote repository and verify its' signature. Command
+line format resembles apt utlitily sources.list(5).
 
 PPA urls could specified in short format:
 
@@ -18,6 +19,8 @@ Options:
   -dep-follow-recommends=false: when processing dependencies, follow Recommends
   -dep-follow-source=false: when processing dependencies, follow from binary to Source packages
   -dep-follow-suggests=false: when processing dependencies, follow Suggests
+  -filter="": filter packages in mirror
+  -filter-with-deps=false: when filtering, include dependencies of matching packages as well
   -ignore-signatures=false: disable verification of Release file signatures
   -keyring=: gpg keyring to use when verifying Release file (could be specified multiple times)
   -with-sources=false: download source packages in addition to binary packages

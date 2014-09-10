@@ -10,7 +10,7 @@ class ImportRepo1Test(BaseTest):
         "aptly repo create -comment=Cool -distribution=squeeze repo1",
         "aptly repo add repo1 ${files}"
     ]
-    runCmd = "aptly repo import wheezy-main repo1 nginx unpaper_0.4.2-1_amd64"
+    runCmd = "aptly repo import wheezy-main repo1 'nginx (>= 1.2)' unpaper_0.4.2-1_amd64"
 
     def check(self):
         self.check_output()
@@ -119,3 +119,17 @@ class ImportRepo8Test(BaseTest):
     ]
     runCmd = "aptly repo import wheezy-main repo1 pyspi"
     expectedCode = 1
+
+
+class ImportRepo9Test(BaseTest):
+    """
+    import to local repo: import with complex query
+    """
+    fixtureDB = True
+    fixtureCmds = [
+        "aptly repo create -comment=Cool -distribution=squeeze repo1",
+    ]
+    runCmd = "aptly repo import wheezy-main repo1 '(httpd, $$Source (=nginx)) | exim4'"
+
+    def output_processor(self, output):
+        return "\n".join(sorted(output.split("\n")))

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/smira/aptly/deb"
+	"github.com/smira/aptly/query"
 	"github.com/smira/commander"
 	"github.com/smira/flag"
 	"strings"
@@ -12,7 +13,7 @@ func aptlyMirrorCreate(cmd *commander.Command, args []string) error {
 	var err error
 	if !(len(args) == 2 && strings.HasPrefix(args[1], "ppa:") || len(args) >= 3) {
 		cmd.Usage()
-		return err
+		return commander.ErrCommandError
 	}
 
 	downloadSources := context.Config().DownloadSourcePackages || context.flags.Lookup("with-sources").Value.Get().(bool)
@@ -35,6 +36,16 @@ func aptlyMirrorCreate(cmd *commander.Command, args []string) error {
 	repo, err := deb.NewRemoteRepo(mirrorName, archiveURL, distribution, components, context.ArchitecturesList(), downloadSources)
 	if err != nil {
 		return fmt.Errorf("unable to create mirror: %s", err)
+	}
+
+	repo.Filter = context.flags.Lookup("filter").Value.String()
+	repo.FilterWithDeps = context.flags.Lookup("filter-with-deps").Value.Get().(bool)
+
+	if repo.Filter != "" {
+		_, err = query.Parse(repo.Filter)
+		if err != nil {
+			return fmt.Errorf("unable to create mirror: %s", err)
+		}
 	}
 
 	verifier, err := getVerifier(context.flags)
@@ -63,7 +74,8 @@ func makeCmdMirrorCreate() *commander.Command {
 		Short:     "create new mirror",
 		Long: `
 Creates mirror <name> of remote repository, aptly supports both regular and flat Debian repositories exported
-via HTTP. aptly would try download Release file from remote repository and verify its' signature.
+via HTTP. aptly would try download Release file from remote repository and verify its' signature. Command
+line format resembles apt utlitily sources.list(5).
 
 PPA urls could specified in short format:
 
@@ -78,6 +90,8 @@ Example:
 
 	cmd.Flag.Bool("ignore-signatures", false, "disable verification of Release file signatures")
 	cmd.Flag.Bool("with-sources", false, "download source packages in addition to binary packages")
+	cmd.Flag.String("filter", "", "filter packages in mirror")
+	cmd.Flag.Bool("filter-with-deps", false, "when filtering, include dependencies of matching packages as well")
 	cmd.Flag.Var(&keyRingsFlag{}, "keyring", "gpg keyring to use when verifying Release file (could be specified multiple times)")
 
 	return cmd
