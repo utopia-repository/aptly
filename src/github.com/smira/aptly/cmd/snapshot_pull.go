@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/smira/aptly/deb"
+	"github.com/smira/aptly/query"
 	"github.com/smira/commander"
 	"github.com/smira/flag"
 	"sort"
@@ -13,11 +14,12 @@ func aptlySnapshotPull(cmd *commander.Command, args []string) error {
 	var err error
 	if len(args) < 4 {
 		cmd.Usage()
-		return err
+		return commander.ErrCommandError
 	}
 
 	noDeps := context.flags.Lookup("no-deps").Value.Get().(bool)
 	noRemove := context.flags.Lookup("no-remove").Value.Get().(bool)
+	allMatches := context.flags.Lookup("all-matches").Value.Get().(bool)
 
 	// Load <name> snapshot
 	snapshot, err := context.CollectionFactory().SnapshotCollection().ByName(args[0])
@@ -75,77 +77,57 @@ func aptlySnapshotPull(cmd *commander.Command, args []string) error {
 		return fmt.Errorf("unable to determine list of architectures, please specify explicitly")
 	}
 
-	// Initial dependencies out of arguments
-	initialDependencies := make([]deb.Dependency, len(args)-3)
-	for i, arg := range args[3:] {
-		initialDependencies[i], err = deb.ParseDependency(arg)
-		if err != nil {
-			return fmt.Errorf("unable to parse argument: %s", err)
-		}
+	// Build architecture query: (arch == "i386" | arch == "amd64" | ...)
+	var archQuery deb.PackageQuery = &deb.FieldQuery{Field: "$Architecture", Relation: deb.VersionEqual, Value: ""}
+	for _, arch := range architecturesList {
+		archQuery = &deb.OrQuery{L: &deb.FieldQuery{Field: "$Architecture", Relation: deb.VersionEqual, Value: arch}, R: archQuery}
 	}
 
-	// Perform pull
-	for _, arch := range architecturesList {
-		dependencies := make([]deb.Dependency, len(initialDependencies), 128)
-		for i := range dependencies {
-			dependencies[i] = initialDependencies[i]
-			dependencies[i].Architecture = arch
+	// Initial queries out of arguments
+	queries := make([]deb.PackageQuery, len(args)-3)
+	for i, arg := range args[3:] {
+		queries[i], err = query.Parse(arg)
+		if err != nil {
+			return fmt.Errorf("unable to parse query: %s", err)
+		}
+		// Add architecture filter
+		queries[i] = &deb.AndQuery{queries[i], archQuery}
+	}
+
+	// Filter with dependencies as requested
+	result, err := sourcePackageList.Filter(queries, !noDeps, packageList, context.DependencyOptions(), architecturesList)
+	if err != nil {
+		return fmt.Errorf("unable to pull: %s", err)
+	}
+	result.PrepareIndex()
+
+	alreadySeen := map[string]bool{}
+
+	result.ForEachIndexed(func(pkg *deb.Package) error {
+		key := pkg.Architecture + "_" + pkg.Name
+		_, seen := alreadySeen[key]
+
+		// If we haven't seen such name-architecture pair and were instructed to remove, remove it
+		if !noRemove && !seen {
+			// Remove all packages with the same name and architecture
+			pS := packageList.Search(deb.Dependency{Architecture: pkg.Architecture, Pkg: pkg.Name}, true)
+			for _, p := range pS {
+				packageList.Remove(p)
+				context.Progress().ColoredPrintf("@r[-]@| %s removed", p)
+			}
 		}
 
-		// Go over list of initial dependencies + list of dependencies found
-		for i := 0; i < len(dependencies); i++ {
-			dep := dependencies[i]
-
-			// Search for package that can satisfy dependencies
-			pkg := sourcePackageList.Search(dep)
-			if pkg == nil {
-				context.Progress().ColoredPrintf("@y[!]@| @!Dependency %s can't be satisfied with source %s@|", &dep, source)
-				continue
-			}
-
-			if !noRemove {
-				// Remove all packages with the same name and architecture
-				for p := packageList.Search(deb.Dependency{Architecture: pkg.Architecture, Pkg: pkg.Name}); p != nil; {
-					packageList.Remove(p)
-					context.Progress().ColoredPrintf("@r[-]@| %s removed", p)
-					p = packageList.Search(deb.Dependency{Architecture: pkg.Architecture, Pkg: pkg.Name})
-				}
-			}
-
-			// Add new discovered package
+		// If !allMatches, add only first matching name-arch package
+		if !seen || allMatches {
 			packageList.Add(pkg)
 			context.Progress().ColoredPrintf("@g[+]@| %s added", pkg)
-
-			if noDeps {
-				continue
-			}
-
-			// Find missing dependencies for single added package
-			pL := deb.NewPackageList()
-			pL.Add(pkg)
-
-			var missing []deb.Dependency
-			missing, err = pL.VerifyDependencies(context.DependencyOptions(), []string{arch}, packageList, nil)
-			if err != nil {
-				context.Progress().ColoredPrintf("@y[!]@| @!Error while verifying dependencies for pkg %s: %s@|", pkg, err)
-			}
-
-			// Append missing dependencies to the list of dependencies to satisfy
-			for _, misDep := range missing {
-				found := false
-				for _, d := range dependencies {
-					if d == misDep {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					dependencies = append(dependencies, misDep)
-				}
-			}
 		}
-	}
+
+		alreadySeen[key] = true
+
+		return nil
+	})
+	alreadySeen = nil
 
 	if context.flags.Lookup("dry-run").Value.Get().(bool) {
 		context.Progress().Printf("\nNot creating snapshot, as dry run was requested.\n")
@@ -167,14 +149,14 @@ func aptlySnapshotPull(cmd *commander.Command, args []string) error {
 func makeCmdSnapshotPull() *commander.Command {
 	cmd := &commander.Command{
 		Run:       aptlySnapshotPull,
-		UsageLine: "pull <name> <source> <destination> <package-name> ...",
+		UsageLine: "pull <name> <source> <destination> <package-query> ...",
 		Short:     "pull packages from another snapshot",
 		Long: `
 Command pull pulls new packages along with its' dependencies to snapshot <name>
 from snapshot <source>. Pull can upgrade package version in <name> with
 versions from <source> following dependencies. New snapshot <destination>
 is created as a result of this process. Packages could be specified simply
-as 'package-name' or as dependency 'package-name (>= version)'.
+as 'package-name' or as package queries.
 
 Example:
 
@@ -186,6 +168,7 @@ Example:
 	cmd.Flag.Bool("dry-run", false, "don't create destination snapshot, just show what would be pulled")
 	cmd.Flag.Bool("no-deps", false, "don't process dependencies, just pull listed packages")
 	cmd.Flag.Bool("no-remove", false, "don't remove other package versions when pulling package")
+	cmd.Flag.Bool("all-matches", false, "pull all the packages that satisfy the dependency version requirements")
 
 	return cmd
 }

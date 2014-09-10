@@ -2,6 +2,7 @@ package deb
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -178,6 +179,8 @@ const (
 	VersionEqual
 	VersionGreaterOrEqual
 	VersionGreater
+	VersionPatternMatch
+	VersionRegexp
 )
 
 // Dependency is a parsed version of Debian dependency to package
@@ -186,6 +189,7 @@ type Dependency struct {
 	Relation     int
 	Version      string
 	Architecture string
+	Regexp       *regexp.Regexp
 }
 
 // Hash calculates some predefined unique ID of Dependency
@@ -207,6 +211,10 @@ func (d *Dependency) String() string {
 		rel = ">="
 	case VersionLessOrEqual:
 		rel = "<="
+	case VersionPatternMatch:
+		rel = "%"
+	case VersionRegexp:
+		rel = "~"
 	case VersionDontCare:
 		return fmt.Sprintf("%s [%s]", d.Pkg, d.Architecture)
 	}

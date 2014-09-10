@@ -5,7 +5,6 @@ import (
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/utils"
 	"sort"
-	"strings"
 )
 
 // Dependency options
@@ -86,11 +85,11 @@ func NewPackageListFromRefList(reflist *PackageRefList, collection *PackageColle
 
 // Add appends package to package list, additionally checking for uniqueness
 func (l *PackageList) Add(p *Package) error {
-	key := string(p.Key(""))
+	key := string(p.ShortKey(""))
 	existing, ok := l.packages[key]
 	if ok {
 		if !existing.Equals(p) {
-			return fmt.Errorf("conflict in package %s: %#v != %#v", p, existing, p)
+			return fmt.Errorf("conflict in package %s", p)
 		}
 		return nil
 	}
@@ -101,7 +100,7 @@ func (l *PackageList) Add(p *Package) error {
 			l.providesIndex[provides] = append(l.providesIndex[provides], p)
 		}
 
-		i := sort.Search(len(l.packagesIndex), func(j int) bool { return l.packagesIndex[j].Name >= p.Name })
+		i := sort.Search(len(l.packagesIndex), func(j int) bool { return l.lessPackages(p, l.packagesIndex[j]) })
 
 		// insert p into l.packagesIndex in position i
 		l.packagesIndex = append(l.packagesIndex, nil)
@@ -115,6 +114,22 @@ func (l *PackageList) Add(p *Package) error {
 func (l *PackageList) ForEach(handler func(*Package) error) error {
 	var err error
 	for _, p := range l.packages {
+		err = handler(p)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// ForEachIndexed calls handler for each package in list in indexed order
+func (l *PackageList) ForEachIndexed(handler func(*Package) error) error {
+	if !l.indexed {
+		panic("list not indexed, can't iterate")
+	}
+
+	var err error
+	for _, p := range l.packagesIndex {
 		err = handler(p)
 		if err != nil {
 			return err
@@ -137,7 +152,7 @@ func (l *PackageList) Append(pl *PackageList) error {
 		existing, ok := l.packages[k]
 		if ok {
 			if !existing.Equals(p) {
-				return fmt.Errorf("conflict in package %s: %#v != %#v", p, existing, p)
+				return fmt.Errorf("conflict in package %s", p)
 			}
 		} else {
 			l.packages[k] = p
@@ -149,7 +164,7 @@ func (l *PackageList) Append(pl *PackageList) error {
 
 // Remove removes package from the list, and updates index when required
 func (l *PackageList) Remove(p *Package) {
-	delete(l.packages, string(p.Key("")))
+	delete(l.packages, string(p.ShortKey("")))
 	if l.indexed {
 		for _, provides := range p.Provides {
 			for i, pkg := range l.providesIndex[provides] {
@@ -263,7 +278,7 @@ func (l *PackageList) VerifyDependencies(options int, architectures []string, so
 						continue
 					}
 
-					if sources.Search(dep) == nil {
+					if sources.Search(dep, false) == nil {
 						variantsMissing = append(variantsMissing, dep)
 						missingCount++
 					} else {
@@ -300,9 +315,21 @@ func (l *PackageList) Swap(i, j int) {
 	l.packagesIndex[i], l.packagesIndex[j] = l.packagesIndex[j], l.packagesIndex[i]
 }
 
-// Compare compares two names in lexographical order
+func (l *PackageList) lessPackages(iPkg, jPkg *Package) bool {
+	if iPkg.Name == jPkg.Name {
+		cmp := CompareVersions(iPkg.Version, jPkg.Version)
+		if cmp == 0 {
+			return iPkg.Architecture < jPkg.Architecture
+		}
+		return cmp == 1
+	}
+
+	return iPkg.Name < jPkg.Name
+}
+
+// Less compares two packages by name (lexographical) and version (latest to oldest)
 func (l *PackageList) Less(i, j int) bool {
-	return l.packagesIndex[i].Name < l.packagesIndex[j].Name
+	return l.lessPackages(l.packagesIndex[i], l.packagesIndex[j])
 }
 
 // PrepareIndex prepares list for indexing
@@ -325,16 +352,32 @@ func (l *PackageList) PrepareIndex() {
 	l.indexed = true
 }
 
-// Search searches package index for specified package
-func (l *PackageList) Search(dep Dependency) *Package {
+// Scan searches package index using full scan
+func (l *PackageList) Scan(q PackageQuery) (result *PackageList) {
+	result = NewPackageList()
+	for _, pkg := range l.packages {
+		if q.Matches(pkg) {
+			result.Add(pkg)
+		}
+	}
+
+	return
+}
+
+// Search searches package index for specified package(s) using optimized queries
+func (l *PackageList) Search(dep Dependency, allMatches bool) (searchResults []*Package) {
 	if !l.indexed {
 		panic("list not indexed, can't search")
 	}
 
 	if dep.Relation == VersionDontCare {
 		for _, p := range l.providesIndex[dep.Pkg] {
-			if p.MatchesArchitecture(dep.Architecture) {
-				return p
+			if dep.Architecture == "" || p.MatchesArchitecture(dep.Architecture) {
+				searchResults = append(searchResults, p)
+
+				if !allMatches {
+					break
+				}
 			}
 		}
 	}
@@ -344,16 +387,21 @@ func (l *PackageList) Search(dep Dependency) *Package {
 	for i < len(l.packagesIndex) && l.packagesIndex[i].Name == dep.Pkg {
 		p := l.packagesIndex[i]
 		if p.MatchesDependency(dep) {
-			return p
+			searchResults = append(searchResults, p)
+
+			if !allMatches {
+				break
+			}
 		}
 
 		i++
 	}
-	return nil
+
+	return
 }
 
 // Filter filters package index by specified queries (ORed together), possibly pulling dependencies
-func (l *PackageList) Filter(queries []string, withDependencies bool, source *PackageList, dependencyOptions int, architecturesList []string) (*PackageList, error) {
+func (l *PackageList) Filter(queries []PackageQuery, withDependencies bool, source *PackageList, dependencyOptions int, architecturesList []string) (*PackageList, error) {
 	if !l.indexed {
 		panic("list not indexed, can't filter")
 	}
@@ -361,53 +409,16 @@ func (l *PackageList) Filter(queries []string, withDependencies bool, source *Pa
 	result := NewPackageList()
 
 	for _, query := range queries {
-		isDepQuery := strings.IndexAny(query, " (){}=<>") != -1
-
-		if !isDepQuery {
-			// try to interpret query as package string representation
-
-			// convert Package.String() to Package.Key()
-			i := strings.Index(query, "_")
-			if i != -1 {
-				pkg, query := query[:i], query[i+1:]
-				j := strings.LastIndex(query, "_")
-				if j != -1 {
-					version, arch := query[:j], query[j+1:]
-					p := l.packages["P"+arch+" "+pkg+" "+version]
-					if p != nil {
-						result.Add(p)
-						continue
-					}
-				}
-			}
-		}
-
-		// try as dependency
-		dep, err := ParseDependency(query)
-		if err != nil {
-			if isDepQuery {
-				return nil, err
-			}
-			// parsing failed, but probably that wasn't a dep query
-			continue
-		}
-
-		i := sort.Search(len(l.packagesIndex), func(j int) bool { return l.packagesIndex[j].Name >= dep.Pkg })
-
-		for i < len(l.packagesIndex) && l.packagesIndex[i].Name == dep.Pkg {
-			p := l.packagesIndex[i]
-			if p.MatchesDependency(dep) {
-				result.Add(p)
-			}
-			i++
-		}
+		result.Append(query.Query(l))
 	}
 
 	if withDependencies {
 		added := result.Len()
 
 		dependencySource := NewPackageList()
-		dependencySource.Append(source)
+		if source != nil {
+			dependencySource.Append(source)
+		}
 		dependencySource.Append(result)
 		dependencySource.PrepareIndex()
 
@@ -423,11 +434,13 @@ func (l *PackageList) Filter(queries []string, withDependencies bool, source *Pa
 
 			// try to satisfy dependencies
 			for _, dep := range missing {
-				p := l.Search(dep)
-				if p != nil {
-					result.Add(p)
-					dependencySource.Add(p)
-					added++
+				searchResults := l.Search(dep, false)
+				if searchResults != nil {
+					for _, p := range searchResults {
+						result.Add(p)
+						dependencySource.Add(p)
+						added++
+					}
 				}
 			}
 		}

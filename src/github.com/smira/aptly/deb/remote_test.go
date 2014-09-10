@@ -101,9 +101,14 @@ func (s *RemoteRepoSuite) TestInvalidURL(c *C) {
 }
 
 func (s *RemoteRepoSuite) TestFlatCreation(c *C) {
-	c.Check(s.flat.Distribution, Equals, "")
+	c.Check(s.flat.IsFlat(), Equals, true)
+	c.Check(s.flat.Distribution, Equals, "./")
 	c.Check(s.flat.Architectures, IsNil)
 	c.Check(s.flat.Components, IsNil)
+
+	flat2, _ := NewRemoteRepo("flat2", "http://pkg.jenkins-ci.org/debian-stable", "binary/", []string{}, []string{}, false)
+	c.Check(flat2.IsFlat(), Equals, true)
+	c.Check(flat2.Distribution, Equals, "./binary/")
 
 	_, err := NewRemoteRepo("fl", "http://some.repo/", "./", []string{"main"}, []string{}, false)
 	c.Check(err, ErrorMatches, "components aren't supported for flat repos")
@@ -246,7 +251,7 @@ func (s *RemoteRepoSuite) TestDownload(c *C) {
 	s.downloader.ExpectResponse("http://mirror.yandex.ru/debian/dists/squeeze/main/binary-i386/Packages", examplePackagesFile)
 	s.downloader.ExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb", "xyz")
 
-	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false)
+	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false, 0, nil)
 	c.Assert(err, IsNil)
 	c.Assert(s.downloader.Empty(), Equals, true)
 	c.Assert(s.repo.packageRefs, NotNil)
@@ -279,7 +284,7 @@ func (s *RemoteRepoSuite) TestDownloadWithSources(c *C) {
 	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/access-modifier-checker/access-modifier-checker_1.0.orig.tar.gz", "abcd")
 	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.debian.tar.gz", "abcde")
 
-	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false)
+	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false, 0, nil)
 	c.Assert(err, IsNil)
 	c.Assert(s.downloader.Empty(), Equals, true)
 	c.Assert(s.repo.packageRefs, NotNil)
@@ -314,7 +319,7 @@ func (s *RemoteRepoSuite) TestDownloadFlat(c *C) {
 	err := s.flat.Fetch(downloader, nil)
 	c.Assert(err, IsNil)
 
-	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false)
+	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false, 0, nil)
 	c.Assert(err, IsNil)
 	c.Assert(downloader.Empty(), Equals, true)
 	c.Assert(s.flat.packageRefs, NotNil)
@@ -348,7 +353,7 @@ func (s *RemoteRepoSuite) TestDownloadWithSourcesFlat(c *C) {
 	err := s.flat.Fetch(downloader, nil)
 	c.Assert(err, IsNil)
 
-	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false)
+	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false, 0, nil)
 	c.Assert(err, IsNil)
 	c.Assert(downloader.Empty(), Equals, true)
 	c.Assert(s.flat.packageRefs, NotNil)

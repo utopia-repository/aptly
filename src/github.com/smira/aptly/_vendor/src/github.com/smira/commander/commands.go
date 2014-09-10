@@ -11,6 +11,7 @@ package commander
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,11 @@ const (
 	CommandsList = iota
 	HelpTopicsList
 	Unlisted
+)
+
+var (
+	ErrFlagError    = errors.New("unable to parse flags")
+	ErrCommandError = errors.New("unable to parse command")
 )
 
 // A Command is an implementation of a subcommand.
@@ -192,7 +198,7 @@ func (c *Command) ParseFlags(args []string) (result *flag.FlagSet, argsNoFlags [
 	parseFlags := func(c *Command, args []string, flags *flag.FlagSet, setValue bool) (leftArgs []string, err error) {
 		flags.Usage = func() {
 			c.Usage()
-			err = fmt.Errorf("Failed to parse flags.")
+			err = ErrFlagError
 		}
 		flags.Parse(args, setValue)
 		if err != nil {
@@ -306,7 +312,7 @@ func (c *Command) Dispatch(args []string) error {
 	if err := c.usage(); err != nil {
 		return err
 	}
-	return nil
+	return ErrCommandError
 }
 
 func (c *Command) usage() error {

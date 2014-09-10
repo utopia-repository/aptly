@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/deb"
 	"github.com/smira/aptly/utils"
 	"github.com/smira/commander"
@@ -10,10 +11,16 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 )
 
 func aptlyServe(cmd *commander.Command, args []string) error {
 	var err error
+
+	if len(args) != 0 {
+		cmd.Usage()
+		return commander.ErrCommandError
+	}
 
 	if context.CollectionFactory().PublishedRepoCollection().Len() == 0 {
 		fmt.Printf("No published repositories, unable to serve.\n")
@@ -69,15 +76,15 @@ func aptlyServe(cmd *commander.Command, args []string) error {
 		}
 
 		fmt.Printf("# %s\ndeb http://%s:%s/%s %s %s\n",
-			repo, listenHost, listenPort, prefix, repo.Distribution, repo.Component)
+			repo, listenHost, listenPort, prefix, repo.Distribution, strings.Join(repo.Components(), " "))
 
 		if utils.StrSliceHasItem(repo.Architectures, "source") {
 			fmt.Printf("deb-src http://%s:%s/%s %s %s\n",
-				listenHost, listenPort, prefix, repo.Distribution, repo.Component)
+				listenHost, listenPort, prefix, repo.Distribution, strings.Join(repo.Components(), " "))
 		}
 	}
 
-	publicPath := context.PublishedStorage().PublicPath()
+	publicPath := context.GetPublishedStorage("").(aptly.LocalPublishedStorage).PublicPath()
 	ShutdownContext()
 
 	fmt.Printf("\nStarting web server at: %s (press Ctrl+C to quit)...\n", listen)

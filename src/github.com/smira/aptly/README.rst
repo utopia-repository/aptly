@@ -8,6 +8,10 @@ aptly
 .. image:: https://coveralls.io/repos/smira/aptly/badge.png?branch=HEAD
     :target: https://coveralls.io/r/smira/aptly?branch=HEAD
 
+.. image:: http://gobuild.io/badge/github.com/smira/aptly/download.png
+    :target: http://gobuild.io/github.com/smira/aptly
+
+
 Aptly is a swiss army knife for Debian repository management.
 
 Documentation is available at `http://www.aptly.info/ <http://www.aptly.info/>`_. For support use
@@ -51,7 +55,7 @@ Ubuntu 10.0+. Package contains aptly binary, man page and bash completion.
 
 Binary executables (depends almost only on libc) are available for download from `Bintray <http://dl.bintray.com/smira/aptly/>`_.
 
-If you have Go environment set up, you can build aptly from source by running (go 1.1+ required)::
+If you have Go environment set up, you can build aptly from source by running (go 1.2+ required)::
 
     go get -u github.com/mattn/gom
     mkdir -p $GOPATH/src/github.com/smira/aptly

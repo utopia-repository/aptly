@@ -1,6 +1,7 @@
 {
   "rootDir": "${HOME}/.aptly",
   "downloadConcurrency": 4,
+  "downloadSpeedLimit": 0,
   "architectures": [],
   "dependencyFollowSuggests": false,
   "dependencyFollowRecommends": false,
@@ -10,5 +11,6 @@
   "gpgDisableVerify": false,
   "downloadSourcePackages": false,
   "ppaDistributorID": "ubuntu",
-  "ppaCodename": ""
+  "ppaCodename": "",
+  "S3PublishEndpoints": {}
 }

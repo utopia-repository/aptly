@@ -20,8 +20,9 @@ const (
 	TypeManifest FileType = 1 << iota
 	TypeJournal
 	TypeTable
+	TypeTemp
 
-	TypeAll = TypeManifest | TypeJournal | TypeTable
+	TypeAll = TypeManifest | TypeJournal | TypeTable | TypeTemp
 )
 
 func (t FileType) String() string {
@@ -32,6 +33,8 @@ func (t FileType) String() string {
 		return "journal"
 	case TypeTable:
 		return "table"
+	case TypeTemp:
+		return "temp"
 	}
 	return "<unknown>"
 }
@@ -67,13 +70,17 @@ type Writer interface {
 type File interface {
 	// Open opens the file for read. Returns os.ErrNotExist error
 	// if the file does not exist.
-	// Open returns error if the underlying storage is closed.
+	// Returns ErrClosed if the underlying storage is closed.
 	Open() (r Reader, err error)
 
 	// Create creates the file for writting. Truncate the file if
 	// already exist.
-	// Returns error if the underlying storage is closed.
+	// Returns ErrClosed if the underlying storage is closed.
 	Create() (w Writer, err error)
+
+	// Replace replaces file with newfile.
+	// Returns ErrClosed if the underlying storage is closed.
+	Replace(newfile File) error
 
 	// Type returns the file type
 	Type() FileType
@@ -82,7 +89,7 @@ type File interface {
 	Num() uint64
 
 	// Remove removes the file.
-	// Returns error if the underlying storage is closed.
+	// Returns ErrClosed if the underlying storage is closed.
 	Remove() error
 }
 

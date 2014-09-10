@@ -362,7 +362,11 @@ func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) ite
 func (t *tOps) remove(f *tFile) {
 	num := f.file.Num()
 	t.cacheNS.Delete(num, func(exist bool) {
-		f.file.Remove()
+		if err := f.file.Remove(); err != nil {
+			t.s.logf("table@remove removing @%d %q", num, err)
+		} else {
+			t.s.logf("table@remove removed @%d", num)
+		}
 		if bc := t.s.o.GetBlockCache(); bc != nil {
 			bc.GetNamespace(num).Zap(false)
 		}
@@ -380,23 +384,19 @@ type tWriter struct {
 	w    storage.Writer
 	tw   *table.Writer
 
-	notFirst    bool
 	first, last []byte
 }
 
 func (w *tWriter) add(key, value []byte) error {
-	if w.notFirst {
-		w.last = append(w.last[:0], key...)
-	} else {
-		w.first = append(w.first[:0], key...)
-		w.last = append(w.last[:0], key...)
-		w.notFirst = true
+	if w.first == nil {
+		w.first = append([]byte{}, key...)
 	}
+	w.last = append(w.last[:0], key...)
 	return w.tw.Append(key, value)
 }
 
 func (w *tWriter) empty() bool {
-	return !w.notFirst
+	return w.first == nil
 }
 
 func (w *tWriter) finish() (f *tFile, err error) {
@@ -406,6 +406,7 @@ func (w *tWriter) finish() (f *tFile, err error) {
 	}
 	err = w.w.Sync()
 	if err != nil {
+		w.w.Close()
 		return
 	}
 	w.w.Close()
@@ -420,4 +421,6 @@ func (w *tWriter) drop() {
 	w.w = nil
 	w.file = nil
 	w.tw = nil
+	w.first = nil
+	w.last = nil
 }

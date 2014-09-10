@@ -5,7 +5,6 @@ package aptly
 import (
 	"github.com/smira/aptly/utils"
 	"io"
-	"os"
 )
 
 // PackagePool is asbtraction of package pool storage.
@@ -26,24 +25,32 @@ type PackagePool interface {
 
 // PublishedStorage is abstraction of filesystem storing all published repositories
 type PublishedStorage interface {
-	// PublicPath returns root of public part
-	PublicPath() string
 	// MkDir creates directory recursively under public path
 	MkDir(path string) error
-	// CreateFile creates file for writing under public path
-	CreateFile(path string) (*os.File, error)
+	// PutFile puts file into published storage at specified path
+	PutFile(path string, sourceFilename string) error
 	// RemoveDirs removes directory structure under public path
 	RemoveDirs(path string, progress Progress) error
 	// Remove removes single file under public path
 	Remove(path string) error
 	// LinkFromPool links package file from pool to dist's pool location
-	LinkFromPool(publishedDirectory string, sourcePool PackagePool, sourcePath string) error
+	LinkFromPool(publishedDirectory string, sourcePool PackagePool, sourcePath, sourceMD5 string, force bool) error
 	// Filelist returns list of files under prefix
 	Filelist(prefix string) ([]string, error)
-	// ChecksumsForFile proxies requests to utils.ChecksumsForFile, joining public path
-	ChecksumsForFile(path string) (utils.ChecksumInfo, error)
 	// RenameFile renames (moves) file
 	RenameFile(oldName, newName string) error
+}
+
+// LocalPublishedStorage is published storage on local filesystem
+type LocalPublishedStorage interface {
+	// PublicPath returns root of public part
+	PublicPath() string
+}
+
+// PublishedStorageProvider is a thing that returns PublishedStorage by name
+type PublishedStorageProvider interface {
+	// GetPublishedStorage returns PublishedStorage by name
+	GetPublishedStorage(name string) PublishedStorage
 }
 
 // Progress is a progress displaying entity, it allows progress bars & simple prints

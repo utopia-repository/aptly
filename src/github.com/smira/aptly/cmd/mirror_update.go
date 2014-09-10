@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/smira/aptly/deb"
+	"github.com/smira/aptly/query"
 	"github.com/smira/commander"
 	"github.com/smira/flag"
 )
@@ -10,7 +12,7 @@ func aptlyMirrorUpdate(cmd *commander.Command, args []string) error {
 	var err error
 	if len(args) != 1 {
 		cmd.Usage()
-		return err
+		return commander.ErrCommandError
 	}
 
 	name := args[0]
@@ -37,7 +39,17 @@ func aptlyMirrorUpdate(cmd *commander.Command, args []string) error {
 		return fmt.Errorf("unable to update: %s", err)
 	}
 
-	err = repo.Download(context.Progress(), context.Downloader(), context.CollectionFactory(), context.PackagePool(), ignoreMismatch)
+	var filterQuery deb.PackageQuery
+
+	if repo.Filter != "" {
+		filterQuery, err = query.Parse(repo.Filter)
+		if err != nil {
+			return fmt.Errorf("unable to update: %s", err)
+		}
+	}
+
+	err = repo.Download(context.Progress(), context.Downloader(), context.CollectionFactory(), context.PackagePool(), ignoreMismatch,
+		context.DependencyOptions(), filterQuery)
 	if err != nil {
 		return fmt.Errorf("unable to update: %s", err)
 	}
@@ -70,6 +82,7 @@ Example:
 
 	cmd.Flag.Bool("ignore-checksums", false, "ignore checksum mismatches while downloading package files and metadata")
 	cmd.Flag.Bool("ignore-signatures", false, "disable verification of Release file signatures")
+	cmd.Flag.Int64("download-limit", 0, "limit download speed (kbytes/sec)")
 	cmd.Flag.Var(&keyRingsFlag{}, "keyring", "gpg keyring to use when verifying Release file (could be specified multiple times)")
 
 	return cmd

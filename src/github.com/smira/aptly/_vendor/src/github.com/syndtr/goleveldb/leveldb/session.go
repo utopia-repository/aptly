@@ -37,6 +37,7 @@ type session struct {
 	stJournalNum     uint64 // current journal file number; need external synchronization
 	stPrevJournalNum uint64 // prev journal file number; no longer used; for compatibility with older version of leveldb
 	stSeq            uint64 // last mem compacted seq; need external synchronization
+	stTempFileNum    uint64
 
 	stor     storage.Storage
 	storLock util.Releaser
@@ -68,6 +69,7 @@ func newSession(stor storage.Storage, o *opt.Options) (s *session, err error) {
 	s.setOptions(o)
 	s.tops = newTableOps(s, s.o.GetMaxOpenFiles())
 	s.setVersion(&version{s: s})
+	s.log("log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock D·DeletedEntry L·Level Q·SeqNum T·TimeElapsed")
 	return
 }
 
@@ -83,6 +85,10 @@ func (s *session) close() {
 	if s.manifestWriter != nil {
 		s.manifestWriter.Close()
 	}
+	s.manifest = nil
+	s.manifestWriter = nil
+	s.manifestFile = nil
+	s.stVersion = nil
 }
 
 func (s *session) release() {

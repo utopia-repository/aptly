@@ -80,7 +80,8 @@ class PublishUpdate1Test(BaseTest):
                 raise Exception("file hash doesn't match for %s: %s != %s" % (path, fileHash, h.hexdigest()))
 
         if pathsSeen != set(['main/binary-i386/Packages', 'main/binary-i386/Packages.bz2', 'main/binary-i386/Packages.gz',
-                             'main/source/Sources', 'main/source/Sources.gz', 'main/source/Sources.bz2']):
+                             'main/source/Sources', 'main/source/Sources.gz', 'main/source/Sources.bz2',
+                             'main/binary-i386/Release', 'main/source/Release']):
             raise Exception("path seen wrong: %r" % (pathsSeen, ))
 
 
@@ -210,3 +211,101 @@ class PublishUpdate6Test(BaseTest):
     ]
     runCmd = "aptly publish update maverick"
     expectedCode = 1
+
+
+class PublishUpdate7Test(BaseTest):
+    """
+    publish update: multiple components, add some packages
+    """
+    fixtureCmds = [
+        "aptly repo create repo1",
+        "aptly repo create repo2",
+        "aptly repo add repo1 ${files}/pyspi_0.6.1-1.3.dsc",
+        "aptly repo add repo2 ${files}/libboost-program-options-dev_1.49.0.1_i386.deb",
+        "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick -component=main,contrib repo1 repo2",
+        "aptly repo add repo1 ${files}/pyspi-0.6.1-1.3.stripped.dsc",
+    ]
+    runCmd = "aptly publish update -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec maverick"
+    gold_processor = BaseTest.expand_environ
+
+    def check(self):
+        super(PublishUpdate7Test, self).check()
+
+        self.check_exists('public/dists/maverick/InRelease')
+        self.check_exists('public/dists/maverick/Release')
+        self.check_exists('public/dists/maverick/Release.gpg')
+
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages')
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages.gz')
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/source/Sources')
+        self.check_exists('public/dists/maverick/main/source/Sources.gz')
+        self.check_exists('public/dists/maverick/main/source/Sources.bz2')
+
+        self.check_exists('public/dists/maverick/contrib/binary-i386/Packages')
+        self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.gz')
+        self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/contrib/source/Sources')
+        self.check_exists('public/dists/maverick/contrib/source/Sources.gz')
+        self.check_exists('public/dists/maverick/contrib/source/Sources.bz2')
+
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1-1.3.dsc')
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1-1.3.diff.gz')
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1.orig.tar.gz')
+        self.check_exists('public/pool/main/p/pyspi/pyspi-0.6.1-1.3.stripped.dsc')
+        self.check_exists('public/pool/contrib/b/boost-defaults/libboost-program-options-dev_1.49.0.1_i386.deb')
+
+        # verify contents except of sums
+        self.check_file_contents('public/dists/maverick/main/source/Sources', 'sources', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+        self.check_file_contents('public/dists/maverick/main/binary-i386/Packages', 'binary', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+        self.check_file_contents('public/dists/maverick/contrib/source/Sources', 'sources2', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+        self.check_file_contents('public/dists/maverick/contrib/binary-i386/Packages', 'binary2', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+
+
+class PublishUpdate8Test(BaseTest):
+    """
+    publish update: update empty repos to empty repos
+    """
+    fixtureCmds = [
+        "aptly repo create repo1",
+        "aptly repo create repo2",
+        "aptly publish repo -skip-signing -component=main,contrib -architectures=i386 -distribution=squeeze repo1 repo2",
+    ]
+    runCmd = "aptly publish update -skip-signing squeeze"
+    gold_processor = BaseTest.expand_environ
+
+
+class PublishUpdate9Test(BaseTest):
+    """
+    publish update: conflicting files in the repo
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files}",
+        "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick local-repo",
+        "aptly repo remove local-repo Name",
+        "aptly repo add local-repo ${testfiles}",
+    ]
+    runCmd = "aptly publish update -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec maverick"
+    expectedCode = 1
+    gold_processor = BaseTest.expand_environ
+
+
+class PublishUpdate10Test(BaseTest):
+    """
+    publish update: -force-overwrite
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files}",
+        "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick local-repo",
+        "aptly repo remove local-repo Name",
+        "aptly repo add local-repo ${testfiles}",
+    ]
+    runCmd = "aptly publish update -force-overwrite -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec maverick"
+    gold_processor = BaseTest.expand_environ
+
+    def check(self):
+        super(PublishUpdate10Test, self).check()
+
+        self.check_file_contents("public/pool/main/p/pyspi/pyspi_0.6.1.orig.tar.gz", "file")

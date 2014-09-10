@@ -12,7 +12,7 @@ func aptlyMirrorShow(cmd *commander.Command, args []string) error {
 	var err error
 	if len(args) != 1 {
 		cmd.Usage()
-		return err
+		return commander.ErrCommandError
 	}
 
 	name := args[0]
@@ -37,6 +37,14 @@ func aptlyMirrorShow(cmd *commander.Command, args []string) error {
 		downloadSources = "yes"
 	}
 	fmt.Printf("Download Sources: %s\n", downloadSources)
+	if repo.Filter != "" {
+		fmt.Printf("Filter: %s\n", repo.Filter)
+		filterWithDeps := "no"
+		if repo.FilterWithDeps {
+			filterWithDeps = "yes"
+		}
+		fmt.Printf("Filter With Deps: %s\n", filterWithDeps)
+	}
 	if repo.LastDownloadDate.IsZero() {
 		fmt.Printf("Last update: never\n")
 	} else {

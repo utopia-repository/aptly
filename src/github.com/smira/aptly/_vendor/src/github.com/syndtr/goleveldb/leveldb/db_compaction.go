@@ -81,7 +81,9 @@ func (c *cMem) flush(mem *memdb.DB, level int) error {
 	s := c.s
 
 	// Write memdb to table
-	t, n, err := s.tops.createFrom(mem.NewIterator(nil))
+	iter := mem.NewIterator(nil)
+	defer iter.Release()
+	t, n, err := s.tops.createFrom(iter)
 	if err != nil {
 		return err
 	}
@@ -176,6 +178,14 @@ func (d *DB) memCompaction() {
 	mem := d.getFrozenMem()
 
 	s.logf("mem@flush N·%d S·%s", mem.Len(), shortenb(mem.Size()))
+
+	// Don't compact empty memdb.
+	if mem.Len() == 0 {
+		s.logf("mem@flush skipping")
+		// drop frozen mem
+		d.dropFrozenMem()
+		return
+	}
 
 	d.transact("mem@flush", func() (err error) {
 		stats.startTimer()
