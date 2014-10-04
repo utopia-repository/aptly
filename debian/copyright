@@ -25,92 +25,84 @@ License: MIT
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 
-Files: _vendor/src/code.google.com/p/gographviz/*
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/*
 Copyright: 2013 Vastech SA (PTY) LTD
 License: Apache-2
  See: /usr/share/common-licenses/Apache-2.0
 
-Files: _vendor/src/github.com/syndtr/goleveldb/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/goleveldb/*
 Copyright: 2012 Suryandaru Triandana
 License: BSD-2-clause
 
-Files: _vendor/src/github.com/syndtr/goleveldb/leveldb/journal/journal*.go
+Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/goleveldb/leveldb/journal/journal*.go
 Copyright: 2011 The LevelDB-Go Authors
 License: BSD-3-clause
 
-Files: _vendor/src/github.com/syndtr/goleveldb/leveldb/util/buffer*.go
+Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/goleveldb/leveldb/util/buffer*.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: _vendor/src/code.google.com/p/go.crypto/* _vendor/src/github.com/smira/flag/* _vendor/src/github.com/golang/lint/* _vendor/src/code.google.com/p/gographviz/scanner/scanner.go
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go.crypto/* src/github.com/smira/aptly/_vendor/src/github.com/smira/flag/* src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/scanner/scanner.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: _vendor/src/code.google.com/p/go-uuid/uuid/*
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go-uuid/uuid/*
 Copyright: 2009 Google Inc.
 License: BSD-3-clause
 
-Files: _vendor/src/code.google.com/p/go-uuid/lib/codereview/codereview.py
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go-uuid/lib/codereview/codereview.py
 Copyright: 2009 Google
 License: Apache-2
  See: /usr/share/common-licenses/Apache-2.0
 
-Files: _vendor/src/code.google.com/p/snappy-go/*
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/snappy-go/*
 Copyright: 2011 The Snappy-Go Authors
 License: BSD-3-clause
 
-Files: _vendor/src/github.com/axw/gocov/*
-Copyright: 2012 The Gocov Authors
-License: MIT
-
-Files: _vendor/src/github.com/mattn/goveralls/* _vendor/src/github.com/mattn/go-shellwords/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mattn/go-shellwords/*
 Copyright: 2013-2014 Yasuhiro Matsumoto
 License: MIT
 
-Files: _vendor/src/github.com/mattn/goveralls/gocover.go
-Copyright: 2013 The Go Authors
-License: BSD-3-clause
-
-Files: _vendor/src/github.com/smira/commander/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/commander/*
 Copyright: 2012 The Go-Commander Authors
 License: BSD-3-clause
 
-Files: _vendor/src/github.com/cheggaaa/pb/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/cheggaaa/pb/*
 Copyright: 2012, Sergey Cherepanov
 License: BSD-3-clause
 
-Files: _vendor/src/github.com/mkrautz/goar/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mkrautz/goar/*
 Copyright: 2011 Mikkel Krautz
 License: BSD-3-clause
 
-Files: _vendor/src/github.com/ugorji/go/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/ugorji/go/*
 Copyright: 2012, 2013 Ugorji Nwoke
 License: BSD-3-clause
 
-Files:_vendor/src/github.com/wsxiaoys/terminal/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/wsxiaoys/terminal/*
 Copyright: 2013 Meng Zhang
 License: BSD-3-clause
 
-Files:_vendor/src/code.google.com/p/mxk/go1/*
+Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/mxk/go1/*
 Copyright: 2013 Maxim Khitrov
 License: BSD-3-clause
 
-Files:_vendor/src/github.com/mitchellh/goamz/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/*
 Copyright: 2011 Canonical Ltd
 License: LGPL-3
  See: /usr/share/common-licenses/LGPL-3
 
-Files:_vendor/src/github.com/mitchellh/goamz/exp/sns/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/exp/sns/*
 Copyright: 2011 Memeo Inc
 License: LGPL-3
  See: /usr/share/common-licenses/LGPL-3
 
-Files:_vendor/src/github.com/mitchellh/goamz/exp/sdb/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/exp/sdb/*
 Copyright: 2011 AppsAttic Ltd
 License: LGPL-3
  See: /usr/share/common-licenses/LGPL-3
 
-Files: _vendor/src/github.com/vaughan0/go-ini/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/vaughan0/go-ini/*
 Copyright: 2013 Vaughan Newton
 License: MIT
 
