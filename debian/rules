@@ -27,5 +27,6 @@ override_dh_auto_build:
 	GOPATH=:$(CURDIR):$(SOURCE_DIR)/_vendor go build -o aptly $(PACKAGE_DIR)/main.go
 
 override_dh_auto_install:
+	dh_bash-completion
 	mkdir -p $(DEST_DIR)/usr/bin
 	cp aptly  $(DEST_DIR)/usr/bin/
