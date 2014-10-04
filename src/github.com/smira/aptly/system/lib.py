@@ -155,6 +155,7 @@ class BaseTest(object):
             if not hasattr(command, "__iter__"):
                 params = {
                     'files': os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files"),
+                    'udebs': os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "udebs"),
                     'testfiles': os.path.join(os.path.dirname(inspect.getsourcefile(self.__class__)), self.__class__.__name__),
                 }
                 if self.fixtureWebServer:
@@ -195,17 +196,21 @@ class BaseTest(object):
             self.verify_match(self.get_gold(), self.output, match_prepare=self.outputMatchPrepare)
         except:
             if self.captureResults:
+                if self.outputMatchPrepare is not None:
+                    self.output = self.outputMatchPrepare(self.output)
                 with open(self.get_gold_filename(), "w") as f:
                     f.write(self.output)
             else:
                 raise
 
     def check_cmd_output(self, command, gold_name, match_prepare=None, expected_code=0):
+        output = self.run_cmd(command, expected_code=expected_code)
         try:
-            output = self.run_cmd(command, expected_code=expected_code)
             self.verify_match(self.get_gold(gold_name), output, match_prepare)
         except:
             if self.captureResults:
+                if match_prepare is not None:
+                    output = match_prepare(output)
                 with open(self.get_gold_filename(gold_name), "w") as f:
                     f.write(output)
             else:

@@ -4,10 +4,11 @@ Distribution: ./binary/
 Components: 
 Architectures: 
 Download Sources: no
+Download .udebs: no
 Last update: never
 
 Information from release file:
 Architectures: all
-Date: Wed, 30 Jul 2014 15:23:01 UTC
+Date: Wed, 01 Oct 2014 18:30:34 UTC
 Origin: jenkins-ci.org
 Suite: binary

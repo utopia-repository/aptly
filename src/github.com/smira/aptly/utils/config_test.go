@@ -65,7 +65,10 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 		"      \"awsAccessKeyID\": \"\",\n"+
 		"      \"awsSecretAccessKey\": \"\",\n"+
 		"      \"prefix\": \"\",\n"+
-		"      \"acl\": \"\"\n"+
+		"      \"acl\": \"\",\n"+
+		"      \"storageClass\": \"\",\n"+
+		"      \"encryptionMethod\": \"\",\n"+
+		"      \"plusWorkaround\": false\n"+
 		"    }\n"+
 		"  }\n"+
 		"}")

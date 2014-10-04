@@ -7,6 +7,8 @@
 package leveldb
 
 import (
+	"errors"
+
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -30,45 +32,63 @@ func (p Sizes) Sum() (n uint64) {
 	return n
 }
 
-// Remove unused files.
-func (d *DB) cleanFiles() error {
-	s := d.s
+// Logging.
+func (db *DB) log(v ...interface{})                 { db.s.log(v...) }
+func (db *DB) logf(format string, v ...interface{}) { db.s.logf(format, v...) }
 
-	v := s.version_NB()
-	tables := make(map[uint64]struct{})
-	for _, tt := range v.tables {
-		for _, t := range tt {
-			tables[t.file.Num()] = struct{}{}
+// Check and clean files.
+func (db *DB) checkAndCleanFiles() error {
+	v := db.s.version_NB()
+	tablesMap := make(map[uint64]bool)
+	for _, tables := range v.tables {
+		for _, t := range tables {
+			tablesMap[t.file.Num()] = false
 		}
 	}
 
-	ff, err := s.getFiles(storage.TypeAll)
+	files, err := db.s.getFiles(storage.TypeAll)
 	if err != nil {
 		return err
 	}
+
+	var nTables int
 	var rem []storage.File
-	for _, f := range ff {
+	for _, f := range files {
 		keep := true
 		switch f.Type() {
 		case storage.TypeManifest:
-			keep = f.Num() >= s.manifestFile.Num()
+			keep = f.Num() >= db.s.manifestFile.Num()
 		case storage.TypeJournal:
-			if d.frozenJournalFile != nil {
-				keep = f.Num() >= d.frozenJournalFile.Num()
+			if db.frozenJournalFile != nil {
+				keep = f.Num() >= db.frozenJournalFile.Num()
 			} else {
-				keep = f.Num() >= d.journalFile.Num()
+				keep = f.Num() >= db.journalFile.Num()
 			}
 		case storage.TypeTable:
-			_, keep = tables[f.Num()]
+			_, keep = tablesMap[f.Num()]
+			if keep {
+				tablesMap[f.Num()] = true
+				nTables++
+			}
 		}
 
 		if !keep {
 			rem = append(rem, f)
 		}
 	}
-	s.logf("db@janitor F·%d G·%d", len(ff), len(rem))
+
+	if nTables != len(tablesMap) {
+		for num, present := range tablesMap {
+			if !present {
+				db.logf("db@janitor table missing @%d", num)
+			}
+		}
+		return ErrCorrupted{Type: MissingFiles, Err: errors.New("leveldb: table files missing")}
+	}
+
+	db.logf("db@janitor F·%d G·%d", len(files), len(rem))
 	for _, f := range rem {
-		s.logf("db@janitor removing %s-%d", f.Type(), f.Num())
+		db.logf("db@janitor removing %s-%d", f.Type(), f.Num())
 		if err := f.Remove(); err != nil {
 			return err
 		}

@@ -24,12 +24,14 @@ type Storage interface {
 	KeysByPrefix(prefix []byte) [][]byte
 	FetchByPrefix(prefix []byte) [][]byte
 	Close() error
+	ReOpen() error
 	StartBatch()
 	FinishBatch() error
 	CompactDB() error
 }
 
 type levelDB struct {
+	path  string
 	db    *leveldb.DB
 	batch *leveldb.Batch
 }
@@ -39,17 +41,21 @@ var (
 	_ Storage = &levelDB{}
 )
 
-// OpenDB opens (creates) LevelDB database
-func OpenDB(path string) (Storage, error) {
+func internalOpen(path string) (*leveldb.DB, error) {
 	o := &opt.Options{
 		Filter: filter.NewBloomFilter(10),
 	}
 
-	db, err := leveldb.OpenFile(path, o)
+	return leveldb.OpenFile(path, o)
+}
+
+// OpenDB opens (creates) LevelDB database
+func OpenDB(path string) (Storage, error) {
+	db, err := internalOpen(path)
 	if err != nil {
 		return nil, err
 	}
-	return &levelDB{db: db}, nil
+	return &levelDB{db: db, path: path}, nil
 }
 
 // RecoverDB recovers LevelDB database from corruption
@@ -147,7 +153,23 @@ func (l *levelDB) FetchByPrefix(prefix []byte) [][]byte {
 
 // Close finishes DB work
 func (l *levelDB) Close() error {
-	return l.db.Close()
+	if l.db == nil {
+		return nil
+	}
+	err := l.db.Close()
+	l.db = nil
+	return err
+}
+
+// Reopen tries to re-open the database
+func (l *levelDB) ReOpen() error {
+	if l.db != nil {
+		return nil
+	}
+
+	var err error
+	l.db, err = internalOpen(l.path)
+	return err
 }
 
 // StartBatch starts batch processing of keys

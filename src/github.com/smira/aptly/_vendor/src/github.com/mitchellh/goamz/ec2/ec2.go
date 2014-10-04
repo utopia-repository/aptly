@@ -178,7 +178,7 @@ func buildError(r *http.Response) error {
 	err.RequestId = errors.RequestId
 	err.StatusCode = r.StatusCode
 	if err.Message == "" {
-		err.Message = r.Status
+		err.Message = err.Code
 	}
 	return &err
 }
@@ -220,6 +220,8 @@ func addBlockDeviceParams(prename string, params map[string]string, blockdevices
 		}
 		if k.DeleteOnTermination {
 			params[prefix+"Ebs.DeleteOnTermination"] = "true"
+		} else {
+			params[prefix+"Ebs.DeleteOnTermination"] = "false"
 		}
 		if k.Encrypted {
 			params[prefix+"Ebs.Encrypted"] = "true"
@@ -253,6 +255,7 @@ type RunInstances struct {
 	SubnetId                 string
 	AssociatePublicIpAddress bool
 	DisableAPITermination    bool
+	EbsOptimized             bool
 	ShutdownBehavior         string
 	PrivateIPAddress         string
 	BlockDevices             []BlockDeviceMapping
@@ -267,6 +270,15 @@ type RunInstancesResp struct {
 	OwnerId        string          `xml:"ownerId"`
 	SecurityGroups []SecurityGroup `xml:"groupSet>item"`
 	Instances      []Instance      `xml:"instancesSet>item"`
+}
+
+// BlockDevice represents the association of a block device with an instance.
+type BlockDevice struct {
+	DeviceName          string `xml:"deviceName"`
+	VolumeId            string `xml:"ebs>volumeId"`
+	Status              string `xml:"ebs>status"`
+	AttachTime          string `xml:"ebs>attachTime"`
+	DeleteOnTermination bool   `xml:"ebs>deleteOnTermination"`
 }
 
 // Instance encapsulates a running instance in EC2.
@@ -296,6 +308,8 @@ type Instance struct {
 	LaunchTime         time.Time       `xml:"launchTime"`
 	SourceDestCheck    bool            `xml:"sourceDestCheck"`
 	SecurityGroups     []SecurityGroup `xml:"groupSet>item"`
+	EbsOptimized       string          `xml:"ebsOptimized"`
+	BlockDevices       []BlockDevice   `xml:"blockDeviceMapping>item"`
 }
 
 // RunInstances starts new instances in EC2.
@@ -392,6 +406,9 @@ func (ec2 *EC2) RunInstances(options *RunInstances) (resp *RunInstancesResp, err
 	if options.DisableAPITermination {
 		params["DisableApiTermination"] = "true"
 	}
+	if options.EbsOptimized {
+		params["EbsOptimized"] = "true"
+	}
 	if options.ShutdownBehavior != "" {
 		params["InstanceInitiatedShutdownBehavior"] = options.ShutdownBehavior
 	}
@@ -417,6 +434,78 @@ func clientToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// ----------------------------------------------------------------------------
+// Instance events and status functions and types.
+
+// The DescribeInstanceStatus type encapsulates options for the respective request in EC2.
+//
+// See http://goo.gl/DFySJY for more details.
+type EventsSet struct {
+	Code        string `xml:"code"`
+	Description string `xml:"description"`
+	NotBefore   string `xml:"notBefore"`
+	NotAfter    string `xml:"notAfter"`
+}
+
+type StatusDetails struct {
+	Name          string `xml:"name"`
+	Status        string `xml:"status"`
+	ImpairedSince string `xml:"impairedSince"`
+}
+
+type Status struct {
+	Status  string          `xml:"status"`
+	Details []StatusDetails `xml:"details>item"`
+}
+
+type InstanceStatusSet struct {
+	InstanceId       string        `xml:"instanceId"`
+	AvailabilityZone string        `xml:"availabilityZone"`
+	InstanceState    InstanceState `xml:"instanceState"`
+	SystemStatus     Status        `xml:"systemStatus"`
+	InstanceStatus   Status        `xml:"instanceStatus"`
+	Events           []EventsSet   `xml:"eventsSet>item"`
+}
+
+type DescribeInstanceStatusResp struct {
+	RequestId      string              `xml:"requestId"`
+	InstanceStatus []InstanceStatusSet `xml:"instanceStatusSet>item"`
+}
+
+type DescribeInstanceStatus struct {
+	InstanceIds         []string
+	IncludeAllInstances bool
+	MaxResults          int64
+	NextToken           string
+}
+
+func (ec2 *EC2) DescribeInstanceStatus(options *DescribeInstanceStatus, filter *Filter) (resp *DescribeInstanceStatusResp, err error) {
+	params := makeParams("DescribeInstanceStatus")
+	if options.IncludeAllInstances {
+		params["IncludeAllInstances"] = "true"
+	}
+	if len(options.InstanceIds) > 0 {
+		addParamsList(params, "InstanceIds", options.InstanceIds)
+	}
+	if options.MaxResults > 0 {
+		params["MaxResults"] = strconv.FormatInt(options.MaxResults, 10)
+	}
+	if options.NextToken != "" {
+		params["NextToken"] = options.NextToken
+	}
+	if filter != nil {
+		filter.addParams(params)
+	}
+
+	resp = &DescribeInstanceStatusResp{}
+	err = ec2.query(params, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return
 }
 
 // ----------------------------------------------------------------------------
@@ -478,6 +567,12 @@ type SpotLaunchSpec struct {
 	BlockDevices       []BlockDeviceMapping `xml:"blockDeviceMapping>item"`
 }
 
+type SpotStatus struct {
+	Code       string `xml:"code"`
+	UpdateTime string `xml:"updateTime"`
+	Message    string `xml:"message"`
+}
+
 type SpotRequestResult struct {
 	SpotRequestId  string         `xml:"spotInstanceRequestId"`
 	SpotPrice      string         `xml:"spotPrice"`
@@ -485,6 +580,7 @@ type SpotRequestResult struct {
 	AvailZone      string         `xml:"launchedAvailabilityZone"`
 	InstanceId     string         `xml:"instanceId"`
 	State          string         `xml:"state"`
+	Status         SpotStatus     `xml:"status"`
 	SpotLaunchSpec SpotLaunchSpec `xml:"launchSpecification"`
 	CreateTime     string         `xml:"createTime"`
 	Tags           []Tag          `xml:"tagSet>item"`
@@ -633,6 +729,61 @@ func (ec2 *EC2) CancelSpotRequests(spotrequestIds []string) (resp *CancelSpotReq
 	if err != nil {
 		return nil, err
 	}
+	return
+}
+
+type DescribeSpotPriceHistory struct {
+	InstanceType       []string
+	ProductDescription []string
+	AvailabilityZone   string
+	StartTime, EndTime time.Time
+}
+
+// Response to a DescribeSpotPriceHisotyr request.
+//
+// See http://goo.gl/3BKHj for more details.
+type DescribeSpotPriceHistoryResp struct {
+	RequestId string             `xml:"requestId"`
+	History   []SpotPriceHistory `xml:"spotPriceHistorySet>item"`
+}
+
+type SpotPriceHistory struct {
+	InstanceType       string    `xml:"instanceType"`
+	ProductDescription string    `xml:"productDescription"`
+	SpotPrice          string    `xml:"spotPrice"`
+	Timestamp          time.Time `xml:"timestamp"`
+	AvailabilityZone   string    `xml:"availabilityZone"`
+}
+
+// DescribeSpotPriceHistory gets the spot pricing history.
+//
+// See http://goo.gl/3BKHj for more details.
+func (ec2 *EC2) DescribeSpotPriceHistory(o *DescribeSpotPriceHistory) (resp *DescribeSpotPriceHistoryResp, err error) {
+	params := makeParams("DescribeSpotPriceHistory")
+	if o.AvailabilityZone != "" {
+		params["AvailabilityZone"] = o.AvailabilityZone
+	}
+
+	if !o.StartTime.IsZero() {
+		params["StartTime"] = o.StartTime.In(time.UTC).Format(time.RFC3339)
+	}
+	if !o.EndTime.IsZero() {
+		params["EndTime"] = o.EndTime.In(time.UTC).Format(time.RFC3339)
+	}
+
+	if len(o.InstanceType) > 0 {
+		addParamsList(params, "InstanceType", o.InstanceType)
+	}
+	if len(o.ProductDescription) > 0 {
+		addParamsList(params, "ProductDescription", o.ProductDescription)
+	}
+
+	resp = &DescribeSpotPriceHistoryResp{}
+	err = ec2.query(params, resp)
+	if err != nil {
+		return nil, err
+	}
+
 	return
 }
 
@@ -1834,6 +1985,29 @@ func (ec2 *EC2) CreateTags(resourceIds []string, tags []Tag) (resp *SimpleResp, 
 	return resp, nil
 }
 
+type TagsResp struct {
+	RequestId string        `xml:"requestId"`
+	Tags      []ResourceTag `xml:"tagSet>item"`
+}
+
+type ResourceTag struct {
+	Tag
+	ResourceId   string `xml:"resourceId"`
+	ResourceType string `xml:"resourceType"`
+}
+
+func (ec2 *EC2) Tags(filter *Filter) (*TagsResp, error) {
+	params := makeParams("DescribeTags")
+	filter.addParams(params)
+
+	resp := &TagsResp{}
+	if err := ec2.query(params, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 // Response to a StartInstances request.
 //
 // See http://goo.gl/awKeF for more details.
@@ -2006,6 +2180,27 @@ type CreateVpcResp struct {
 	VPC       VPC    `xml:"vpc"`
 }
 
+// The ModifyVpcAttribute request parameters.
+//
+// See http://docs.amazonwebservices.com/AWSEC2/latest/APIReference/index.html?ApiReference-query-DescribeVpcAttribute.html for more details.
+type ModifyVpcAttribute struct {
+	EnableDnsSupport   bool
+	EnableDnsHostnames bool
+
+	SetEnableDnsSupport   bool
+	SetEnableDnsHostnames bool
+}
+
+// Response to a DescribeVpcAttribute request.
+//
+// See http://docs.amazonwebservices.com/AWSEC2/latest/APIReference/index.html?ApiReference-query-DescribeVpcAttribute.html for more details.
+type VpcAttributeResp struct {
+	RequestId          string `xml:"requestId"`
+	VpcId              string `xml:"vpcId"`
+	EnableDnsSupport   bool   `xml:"enableDnsSupport>value"`
+	EnableDnsHostnames bool   `xml:"enableDnsHostnames>value"`
+}
+
 // CreateInternetGateway request parameters.
 //
 // http://docs.aws.amazon.com/AWSEC2/latest/APIReference/ApiReference-query-CreateInternetGateway.html
@@ -2072,6 +2267,19 @@ type CreateSubnet struct {
 type CreateSubnetResp struct {
 	RequestId string `xml:"requestId"`
 	Subnet    Subnet `xml:"subnet"`
+}
+
+// The ModifySubnetAttribute request parameters
+//
+// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/ApiReference-query-ModifySubnetAttribute.html
+type ModifySubnetAttribute struct {
+	SubnetId            string
+	MapPublicIpOnLaunch bool
+}
+
+type ModifySubnetAttributeResp struct {
+	RequestId string `xml:"requestId"`
+	Return    bool   `xml:"return"`
 }
 
 // Response to a DescribeInternetGateways request.
@@ -2208,6 +2416,49 @@ func (ec2 *EC2) DescribeVpcs(ids []string, filter *Filter) (resp *VpcsResp, err 
 	return
 }
 
+// VpcAttribute describes an attribute of a VPC.
+// You can specify only one attribute at a time.
+// Valid attributes are:
+//    enableDnsSupport | enableDnsHostnames
+//
+// See http://docs.amazonwebservices.com/AWSEC2/latest/APIReference/index.html?ApiReference-query-DescribeVpcAttribute.html for more details.
+func (ec2 *EC2) VpcAttribute(vpcId, attribute string) (resp *VpcAttributeResp, err error) {
+	params := makeParams("DescribeVpcAttribute")
+	params["VpcId"] = vpcId
+	params["Attribute"] = attribute
+
+	resp = &VpcAttributeResp{}
+	err = ec2.query(params, resp)
+	if err != nil {
+		return nil, err
+	}
+	return
+}
+
+// ModifyVpcAttribute modifies the specified attribute of the specified VPC.
+//
+// See http://docs.amazonwebservices.com/AWSEC2/latest/APIReference/index.html?ApiReference-query-ModifyVpcAttribute.html for more details.
+func (ec2 *EC2) ModifyVpcAttribute(vpcId string, options *ModifyVpcAttribute) (*SimpleResp, error) {
+	params := makeParams("ModifyVpcAttribute")
+
+	params["VpcId"] = vpcId
+
+	if options.SetEnableDnsSupport {
+		params["EnableDnsSupport.Value"] = strconv.FormatBool(options.EnableDnsSupport)
+	}
+
+	if options.SetEnableDnsHostnames {
+		params["EnableDnsHostnames.Value"] = strconv.FormatBool(options.EnableDnsHostnames)
+	}
+
+	resp := &SimpleResp{}
+	if err := ec2.query(params, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 // Create a new subnet.
 func (ec2 *EC2) CreateSubnet(options *CreateSubnet) (resp *CreateSubnetResp, err error) {
 	params := makeParams("CreateSubnet")
@@ -2230,6 +2481,26 @@ func (ec2 *EC2) DeleteSubnet(id string) (resp *SimpleResp, err error) {
 	params["SubnetId"] = id
 
 	resp = &SimpleResp{}
+	err = ec2.query(params, resp)
+	if err != nil {
+		return nil, err
+	}
+	return
+}
+
+// ModifySubnetAttribute
+//
+// http://docs.aws.amazon.com/AWSEC2/latest/APIReference/ApiReference-query-ModifySubnetAttribute.html
+func (ec2 *EC2) ModifySubnetAttribute(options *ModifySubnetAttribute) (resp *ModifySubnetAttributeResp, err error) {
+	params := makeParams("ModifySubnetAttribute")
+	params["SubnetId"] = options.SubnetId
+	if options.MapPublicIpOnLaunch {
+		params["MapPublicIpOnLaunch.Value"] = "true"
+	} else {
+		params["MapPublicIpOnLaunch.Value"] = "false"
+	}
+
+	resp = &ModifySubnetAttributeResp{}
 	err = ec2.query(params, resp)
 	if err != nil {
 		return nil, err

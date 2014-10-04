@@ -40,7 +40,7 @@ var _ = testutil.Defer(func() {
 			data := bw.buf.Bytes()
 			restartsLen := int(binary.LittleEndian.Uint32(data[len(data)-4:]))
 			return &block{
-				cmp:            comparer.DefaultComparer,
+				tr:             &Reader{cmp: comparer.DefaultComparer},
 				data:           data,
 				restartsLen:    restartsLen,
 				restartsOffset: len(data) - (restartsLen+1)*4,
@@ -59,7 +59,7 @@ var _ = testutil.Defer(func() {
 						// Make block.
 						br := Build(kv, restartInterval)
 						// Do testing.
-						testutil.KeyValueTesting(nil, br, kv.Clone())
+						testutil.KeyValueTesting(nil, kv.Clone(), br, nil, nil)
 					}
 
 					Describe(Text(), Test)

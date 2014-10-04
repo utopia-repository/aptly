@@ -1,5 +1,7 @@
 This is an implementation of the [LevelDB key/value database](http:code.google.com/p/leveldb) in the [Go programming language](http:golang.org).
 
+[![Build Status](https://travis-ci.org/syndtr/goleveldb.png?branch=master)](https://travis-ci.org/syndtr/goleveldb)
+
 Installation
 -----------
 
@@ -8,7 +10,7 @@ Installation
 Requirements
 -----------
 
-* Need at least `go1.1` or newer.
+* Need at least `go1.2` or newer.
 
 Usage
 -----------
@@ -58,6 +60,17 @@ Seek-then-Iterate:
 Iterate over subset of database content:
 
 	iter := db.NewIterator(&util.Range{Start: []byte("foo"), Limit: []byte("xoo")}, nil)
+	for iter.Next() {
+		// Use key/value.
+		...
+	}
+	iter.Release()
+	err = iter.Error()
+	...
+
+Iterate over subset of database content with a particular prefix:
+
+	iter := db.NewIterator(util.BytesPrefix([]byte("foo-")), nil)
 	for iter.Next() {
 		// Use key/value.
 		...

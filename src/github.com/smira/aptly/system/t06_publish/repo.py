@@ -584,3 +584,65 @@ class PublishRepo25Test(BaseTest):
         super(PublishRepo25Test, self).check()
 
         self.check_file_contents("public/pool/main/p/pyspi/pyspi_0.6.1.orig.tar.gz", "file")
+
+
+class PublishRepo26Test(BaseTest):
+    """
+    publish repo: sign with passphrase
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly_passphrase.pub -secret-keyring=${files}/aptly_passphrase.sec -passphrase=verysecret -distribution=maverick local-repo"
+    gold_processor = BaseTest.expand_environ
+    outputMatchPrepare = lambda _, s: s.replace("gpg: gpg-agent is not available in this session\n", "")
+
+    def check(self):
+        super(PublishRepo26Test, self).check()
+
+        # verify signatures
+        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly_passphrase.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
+        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly_passphrase.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
+                      os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
+
+
+class PublishRepo27Test(BaseTest):
+    """
+    publish repo: with udebs
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files} ${udebs}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick local-repo"
+    gold_processor = BaseTest.expand_environ
+
+    def check(self):
+        super(PublishRepo27Test, self).check()
+
+        self.check_exists('public/dists/maverick/InRelease')
+        self.check_exists('public/dists/maverick/Release')
+        self.check_exists('public/dists/maverick/Release.gpg')
+
+        self.check_exists('public/dists/maverick/main/binary-i386/Release')
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages')
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages.gz')
+        self.check_exists('public/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/source/Release')
+        self.check_exists('public/dists/maverick/main/source/Sources')
+        self.check_exists('public/dists/maverick/main/source/Sources.gz')
+        self.check_exists('public/dists/maverick/main/source/Sources.bz2')
+
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1-1.3.dsc')
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1-1.3.diff.gz')
+        self.check_exists('public/pool/main/p/pyspi/pyspi_0.6.1.orig.tar.gz')
+        self.check_exists('public/pool/main/p/pyspi/pyspi-0.6.1-1.3.stripped.dsc')
+        self.check_exists('public/pool/main/b/boost-defaults/libboost-program-options-dev_1.49.0.1_i386.deb')
+        self.check_exists('public/pool/main/d/dmraid/dmraid-udeb_1.0.0.rc16-4.1_amd64.udeb')
+        self.check_exists('public/pool/main/d/dmraid/dmraid-udeb_1.0.0.rc16-4.1_i386.udeb')
+
+        # verify contents except of sums
+        self.check_file_contents('public/dists/maverick/main/debian-installer/binary-i386/Packages', 'udeb_binary', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))

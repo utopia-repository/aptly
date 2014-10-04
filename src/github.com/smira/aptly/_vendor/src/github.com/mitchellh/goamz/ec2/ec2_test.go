@@ -95,13 +95,13 @@ func (s *S) TestRunInstancesErrorWithoutXML(c *C) {
 	testServer.WaitRequest()
 
 	c.Assert(resp, IsNil)
-	c.Assert(err, ErrorMatches, "500 Internal Server Error")
+	c.Assert(err, ErrorMatches, "")
 
 	ec2err, ok := err.(*ec2.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(ec2err.StatusCode, Equals, 500)
 	c.Assert(ec2err.Code, Equals, "")
-	c.Assert(ec2err.Message, Equals, "500 Internal Server Error")
+	c.Assert(ec2err.Message, Equals, "")
 	c.Assert(ec2err.RequestId, Equals, "")
 }
 
@@ -114,13 +114,13 @@ func (s *S) TestRequestSpotInstancesErrorWithoutXML(c *C) {
 	testServer.WaitRequest()
 
 	c.Assert(resp, IsNil)
-	c.Assert(err, ErrorMatches, "500 Internal Server Error")
+	c.Assert(err, ErrorMatches, "")
 
 	ec2err, ok := err.(*ec2.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(ec2err.StatusCode, Equals, 500)
 	c.Assert(ec2err.Code, Equals, "")
-	c.Assert(ec2err.Message, Equals, "500 Internal Server Error")
+	c.Assert(ec2err.Message, Equals, "")
 	c.Assert(ec2err.RequestId, Equals, "")
 }
 
@@ -140,6 +140,7 @@ func (s *S) TestRunInstancesExample(c *C) {
 		Monitoring:            true,
 		SubnetId:              "subnet-id",
 		DisableAPITermination: true,
+		EbsOptimized:          true,
 		ShutdownBehavior:      "terminate",
 		PrivateIPAddress:      "10.0.0.25",
 		BlockDevices: []ec2.BlockDeviceMapping{
@@ -168,6 +169,7 @@ func (s *S) TestRunInstancesExample(c *C) {
 	c.Assert(req.Form["Monitoring.Enabled"], DeepEquals, []string{"true"})
 	c.Assert(req.Form["SubnetId"], DeepEquals, []string{"subnet-id"})
 	c.Assert(req.Form["DisableApiTermination"], DeepEquals, []string{"true"})
+	c.Assert(req.Form["EbsOptimized"], DeepEquals, []string{"true"})
 	c.Assert(req.Form["InstanceInitiatedShutdownBehavior"], DeepEquals, []string{"terminate"})
 	c.Assert(req.Form["PrivateIpAddress"], DeepEquals, []string{"10.0.0.25"})
 	c.Assert(req.Form["BlockDeviceMapping.1.DeviceName"], DeepEquals, []string{"/dev/sdb"})
@@ -266,6 +268,9 @@ func (s *S) TestRequestSpotInstancesExample(c *C) {
 	c.Assert(resp.SpotRequestResults[0].SpotPrice, Equals, "0.5")
 	c.Assert(resp.SpotRequestResults[0].State, Equals, "open")
 	c.Assert(resp.SpotRequestResults[0].SpotLaunchSpec.ImageId, Equals, "ami-1a2b3c4d")
+	c.Assert(resp.SpotRequestResults[0].Status.Code, Equals, "pending-evaluation")
+	c.Assert(resp.SpotRequestResults[0].Status.UpdateTime, Equals, "2008-05-07T12:51:50.000Z")
+	c.Assert(resp.SpotRequestResults[0].Status.Message, Equals, "Your Spot request has been submitted for review, and is pending evaluation.")
 }
 
 func (s *S) TestCancelSpotRequestsExample(c *C) {
@@ -301,6 +306,7 @@ func (s *S) TestTerminateInstancesExample(c *C) {
 	c.Assert(req.Form["Monitoring.Enabled"], IsNil)
 	c.Assert(req.Form["SubnetId"], IsNil)
 	c.Assert(req.Form["DisableApiTermination"], IsNil)
+	c.Assert(req.Form["EbsOptimized"], IsNil)
 	c.Assert(req.Form["InstanceInitiatedShutdownBehavior"], IsNil)
 	c.Assert(req.Form["PrivateIpAddress"], IsNil)
 
@@ -334,6 +340,9 @@ func (s *S) TestDescribeSpotRequestsExample(c *C) {
 	c.Assert(resp.SpotRequestResults[0].State, Equals, "active")
 	c.Assert(resp.SpotRequestResults[0].SpotPrice, Equals, "0.5")
 	c.Assert(resp.SpotRequestResults[0].SpotLaunchSpec.ImageId, Equals, "ami-1a2b3c4d")
+	c.Assert(resp.SpotRequestResults[0].Status.Code, Equals, "fulfilled")
+	c.Assert(resp.SpotRequestResults[0].Status.UpdateTime, Equals, "2008-05-07T12:51:50.000Z")
+	c.Assert(resp.SpotRequestResults[0].Status.Message, Equals, "Your Spot request is fulfilled.")
 }
 
 func (s *S) TestDescribeInstancesExample1(c *C) {
@@ -366,6 +375,13 @@ func (s *S) TestDescribeInstancesExample1(c *C) {
 	c.Assert(r0i.PrivateDNSName, Equals, "domU-12-31-39-10-56-34.compute-1.internal")
 	c.Assert(r0i.DNSName, Equals, "ec2-174-129-165-232.compute-1.amazonaws.com")
 	c.Assert(r0i.AvailZone, Equals, "us-east-1b")
+
+	b0 := r0i.BlockDevices[0]
+	c.Assert(b0.DeviceName, Equals, "/dev/sda1")
+	c.Assert(b0.VolumeId, Equals, "vol-a082c1c9")
+	c.Assert(b0.Status, Equals, "attached")
+	c.Assert(b0.AttachTime, Equals, "2010-08-17T01:15:21.000Z")
+	c.Assert(b0.DeleteOnTermination, Equals, false)
 }
 
 func (s *S) TestDescribeInstancesExample2(c *C) {
@@ -1041,6 +1057,31 @@ func (s *S) TestSignatureWithEndpointPath(c *C) {
 	c.Assert(req.Form["Signature"], DeepEquals, []string{"QmvgkYGn19WirCuCz/jRp3RmRgFwWR5WRkKZ5AZnyXQ="})
 }
 
+func (s *S) TestDescribeInstanceStatusExample(c *C) {
+	testServer.Response(200, nil, DescribeInstanceStatusExample)
+	options := &ec2.DescribeInstanceStatus{}
+	resp, err := s.ec2.DescribeInstanceStatus(options, nil)
+
+	req := testServer.WaitRequest()
+	c.Assert(req.Form["Action"], DeepEquals, []string{"DescribeInstanceStatus"})
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "3be1508e-c444-4fef-89cc-0b1223c4f02fEXAMPLE")
+	c.Assert(resp.InstanceStatus[0].InstanceId, Equals, "i-1a2b3c4d")
+	c.Assert(resp.InstanceStatus[0].InstanceState.Code, Equals, 16)
+	c.Assert(resp.InstanceStatus[0].SystemStatus.Status, Equals, "impaired")
+	c.Assert(resp.InstanceStatus[0].SystemStatus.Details[0].Name, Equals, "reachability")
+	c.Assert(resp.InstanceStatus[0].SystemStatus.Details[0].Status, Equals, "failed")
+	c.Assert(resp.InstanceStatus[0].SystemStatus.Details[0].ImpairedSince, Equals, "YYYY-MM-DDTHH:MM:SS.000Z")
+	c.Assert(resp.InstanceStatus[0].InstanceStatus.Details[0].Name, Equals, "reachability")
+	c.Assert(resp.InstanceStatus[0].InstanceStatus.Details[0].Status, Equals, "failed")
+	c.Assert(resp.InstanceStatus[0].InstanceStatus.Details[0].ImpairedSince, Equals, "YYYY-MM-DDTHH:MM:SS.000Z")
+	c.Assert(resp.InstanceStatus[0].Events[0].Code, Equals, "instance-retirement")
+	c.Assert(resp.InstanceStatus[0].Events[0].Description, Equals, "The instance is running on degraded hardware")
+	c.Assert(resp.InstanceStatus[0].Events[0].NotBefore, Equals, "YYYY-MM-DDTHH:MM:SS+0000")
+	c.Assert(resp.InstanceStatus[0].Events[0].NotAfter, Equals, "YYYY-MM-DDTHH:MM:SS+0000")
+}
+
 func (s *S) TestAllocateAddressExample(c *C) {
 	testServer.Response(200, nil, AllocateAddressExample)
 
@@ -1221,6 +1262,24 @@ func (s *S) TestCreateSubnet(c *C) {
 	c.Assert(resp.Subnet.VpcId, Equals, "vpc-1a2b3c4d")
 	c.Assert(resp.Subnet.CidrBlock, Equals, "10.0.1.0/24")
 	c.Assert(resp.Subnet.AvailableIpAddressCount, Equals, 251)
+}
+
+func (s *S) TestModifySubnetAttribute(c *C) {
+	testServer.Response(200, nil, ModifySubnetAttributeExample)
+
+	options := &ec2.ModifySubnetAttribute{
+		SubnetId:            "foo",
+		MapPublicIpOnLaunch: true,
+	}
+
+	resp, err := s.ec2.ModifySubnetAttribute(options)
+
+	req := testServer.WaitRequest()
+	c.Assert(req.Form["SubnetId"], DeepEquals, []string{"foo"})
+	c.Assert(req.Form["MapPublicIpOnLaunch.Value"], DeepEquals, []string{"true"})
+
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "59dbff89-35bd-4eac-99ed-be587EXAMPLE")
 }
 
 func (s *S) TestResetImageAttribute(c *C) {

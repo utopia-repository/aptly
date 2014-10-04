@@ -41,6 +41,7 @@ type PackageList struct {
 // Verify interface
 var (
 	_ sort.Interface = &PackageList{}
+	_ PackageCatalog = &PackageList{}
 )
 
 // NewPackageList creates empty package list
@@ -235,6 +236,7 @@ func depSliceDeduplicate(s []Dependency) []Dependency {
 //
 // Analysis would be peformed for each architecture, in specified sources
 func (l *PackageList) VerifyDependencies(options int, architectures []string, sources *PackageList, progress aptly.Progress) ([]Dependency, error) {
+	l.PrepareIndex()
 	missing := make([]Dependency, 0, 128)
 
 	if progress != nil {
@@ -244,7 +246,7 @@ func (l *PackageList) VerifyDependencies(options int, architectures []string, so
 	for _, arch := range architectures {
 		cache := make(map[string]bool, 2048)
 
-		for _, p := range l.packages {
+		for _, p := range l.packagesIndex {
 			if progress != nil {
 				progress.AddBar(1)
 			}
@@ -262,7 +264,6 @@ func (l *PackageList) VerifyDependencies(options int, architectures []string, so
 				variants = depSliceDeduplicate(variants)
 
 				variantsMissing := make([]Dependency, 0, len(variants))
-				missingCount := 0
 
 				for _, dep := range variants {
 					if dep.Architecture == "" {
@@ -270,35 +271,23 @@ func (l *PackageList) VerifyDependencies(options int, architectures []string, so
 					}
 
 					hash := dep.Hash()
-					r, ok := cache[hash]
-					if ok {
-						if !r {
-							missingCount++
-						}
-						continue
+					satisfied, ok := cache[hash]
+					if !ok {
+						satisfied = sources.Search(dep, false) != nil
+						cache[hash] = satisfied
 					}
 
-					if sources.Search(dep, false) == nil {
+					if !satisfied && !ok {
 						variantsMissing = append(variantsMissing, dep)
-						missingCount++
-					} else {
-						cache[hash] = true
+					}
+
+					if satisfied && options&DepFollowAllVariants == 0 {
+						variantsMissing = nil
+						break
 					}
 				}
 
-				if options&DepFollowAllVariants == DepFollowAllVariants {
-					missing = append(missing, variantsMissing...)
-					for _, dep := range variantsMissing {
-						cache[dep.Hash()] = false
-					}
-				} else {
-					if missingCount == len(variants) {
-						missing = append(missing, variantsMissing...)
-						for _, dep := range variantsMissing {
-							cache[dep.Hash()] = false
-						}
-					}
-				}
+				missing = append(missing, variantsMissing...)
 			}
 		}
 	}
@@ -334,6 +323,10 @@ func (l *PackageList) Less(i, j int) bool {
 
 // PrepareIndex prepares list for indexing
 func (l *PackageList) PrepareIndex() {
+	if l.indexed {
+		return
+	}
+
 	l.packagesIndex = make([]*Package, l.Len())
 	l.providesIndex = make(map[string][]*Package, 128)
 
@@ -359,6 +352,23 @@ func (l *PackageList) Scan(q PackageQuery) (result *PackageList) {
 		if q.Matches(pkg) {
 			result.Add(pkg)
 		}
+	}
+
+	return
+}
+
+// SearchSupported returns true for PackageList
+func (l *PackageList) SearchSupported() bool {
+	return true
+}
+
+// SearchByKey looks up package by exact key reference
+func (l *PackageList) SearchByKey(arch, name, version string) (result *PackageList) {
+	result = NewPackageList()
+
+	pkg := l.packages["P"+arch+" "+name+" "+version]
+	if pkg != nil {
+		result.Add(pkg)
 	}
 
 	return
@@ -414,6 +424,7 @@ func (l *PackageList) Filter(queries []PackageQuery, withDependencies bool, sour
 
 	if withDependencies {
 		added := result.Len()
+		result.PrepareIndex()
 
 		dependencySource := NewPackageList()
 		if source != nil {
@@ -434,12 +445,21 @@ func (l *PackageList) Filter(queries []PackageQuery, withDependencies bool, sour
 
 			// try to satisfy dependencies
 			for _, dep := range missing {
+				// dependency might have already been satisfied
+				// with packages already been added
+				if result.Search(dep, false) != nil {
+					continue
+				}
+
 				searchResults := l.Search(dep, false)
 				if searchResults != nil {
 					for _, p := range searchResults {
 						result.Add(p)
 						dependencySource.Add(p)
 						added++
+						if dependencyOptions&DepFollowAllVariants == 0 {
+							break
+						}
 					}
 				}
 			}

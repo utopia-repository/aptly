@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"os"
+	"sort"
 )
 
 type NullVerifier struct {
@@ -79,8 +80,8 @@ type RemoteRepoSuite struct {
 var _ = Suite(&RemoteRepoSuite{})
 
 func (s *RemoteRepoSuite) SetUpTest(c *C) {
-	s.repo, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian", "squeeze", []string{"main"}, []string{}, false)
-	s.flat, _ = NewRemoteRepo("exp42", "http://repos.express42.com/virool/precise/", "./", []string{}, []string{}, false)
+	s.repo, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian", "squeeze", []string{"main"}, []string{}, false, false)
+	s.flat, _ = NewRemoteRepo("exp42", "http://repos.express42.com/virool/precise/", "./", []string{}, []string{}, false, false)
 	s.downloader = http.NewFakeDownloader().ExpectResponse("http://mirror.yandex.ru/debian/dists/squeeze/Release", exampleReleaseFile)
 	s.progress = console.NewProgress()
 	s.db, _ = database.OpenDB(c.MkDir())
@@ -96,7 +97,7 @@ func (s *RemoteRepoSuite) TearDownTest(c *C) {
 }
 
 func (s *RemoteRepoSuite) TestInvalidURL(c *C) {
-	_, err := NewRemoteRepo("s", "http://lolo%2", "squeeze", []string{"main"}, []string{}, false)
+	_, err := NewRemoteRepo("s", "http://lolo%2", "squeeze", []string{"main"}, []string{}, false, false)
 	c.Assert(err, ErrorMatches, ".*hexadecimal escape in host.*")
 }
 
@@ -106,11 +107,11 @@ func (s *RemoteRepoSuite) TestFlatCreation(c *C) {
 	c.Check(s.flat.Architectures, IsNil)
 	c.Check(s.flat.Components, IsNil)
 
-	flat2, _ := NewRemoteRepo("flat2", "http://pkg.jenkins-ci.org/debian-stable", "binary/", []string{}, []string{}, false)
+	flat2, _ := NewRemoteRepo("flat2", "http://pkg.jenkins-ci.org/debian-stable", "binary/", []string{}, []string{}, false, false)
 	c.Check(flat2.IsFlat(), Equals, true)
 	c.Check(flat2.Distribution, Equals, "./binary/")
 
-	_, err := NewRemoteRepo("fl", "http://some.repo/", "./", []string{"main"}, []string{}, false)
+	_, err := NewRemoteRepo("fl", "http://some.repo/", "./", []string{"main"}, []string{}, false, false)
 	c.Check(err, ErrorMatches, "components aren't supported for flat repos")
 }
 
@@ -119,8 +120,9 @@ func (s *RemoteRepoSuite) TestString(c *C) {
 	c.Check(s.flat.String(), Equals, "[exp42]: http://repos.express42.com/virool/precise/ ./")
 
 	s.repo.DownloadSources = true
+	s.repo.DownloadUdebs = true
 	s.flat.DownloadSources = true
-	c.Check(s.repo.String(), Equals, "[yandex]: http://mirror.yandex.ru/debian/ squeeze [src]")
+	c.Check(s.repo.String(), Equals, "[yandex]: http://mirror.yandex.ru/debian/ squeeze [src] [udeb]")
 	c.Check(s.flat.String(), Equals, "[exp42]: http://repos.express42.com/virool/precise/ ./ [src]")
 }
 
@@ -149,6 +151,10 @@ func (s *RemoteRepoSuite) TestReleaseURL(c *C) {
 
 func (s *RemoteRepoSuite) TestBinaryURL(c *C) {
 	c.Assert(s.repo.BinaryURL("main", "amd64").String(), Equals, "http://mirror.yandex.ru/debian/dists/squeeze/main/binary-amd64/Packages")
+}
+
+func (s *RemoteRepoSuite) TestUdebURL(c *C) {
+	c.Assert(s.repo.UdebURL("main", "amd64").String(), Equals, "http://mirror.yandex.ru/debian/dists/squeeze/main/debian-installer/binary-amd64/Packages")
 }
 
 func (s *RemoteRepoSuite) TestSourcesURL(c *C) {
@@ -209,13 +215,13 @@ func (s *RemoteRepoSuite) TestFetchNullVerifier2(c *C) {
 }
 
 func (s *RemoteRepoSuite) TestFetchWrongArchitecture(c *C) {
-	s.repo, _ = NewRemoteRepo("s", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{"xyz"}, false)
+	s.repo, _ = NewRemoteRepo("s", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{"xyz"}, false, false)
 	err := s.repo.Fetch(s.downloader, nil)
 	c.Assert(err, ErrorMatches, "architecture xyz not available in repo.*")
 }
 
 func (s *RemoteRepoSuite) TestFetchWrongComponent(c *C) {
-	s.repo, _ = NewRemoteRepo("s", "http://mirror.yandex.ru/debian/", "squeeze", []string{"xyz"}, []string{"i386"}, false)
+	s.repo, _ = NewRemoteRepo("s", "http://mirror.yandex.ru/debian/", "squeeze", []string{"xyz"}, []string{"i386"}, false, false)
 	err := s.repo.Fetch(s.downloader, nil)
 	c.Assert(err, ErrorMatches, "component xyz not available in repo.*")
 }
@@ -249,19 +255,21 @@ func (s *RemoteRepoSuite) TestDownload(c *C) {
 	s.downloader.ExpectError("http://mirror.yandex.ru/debian/dists/squeeze/main/binary-i386/Packages.bz2", errors.New("HTTP 404"))
 	s.downloader.ExpectError("http://mirror.yandex.ru/debian/dists/squeeze/main/binary-i386/Packages.gz", errors.New("HTTP 404"))
 	s.downloader.ExpectResponse("http://mirror.yandex.ru/debian/dists/squeeze/main/binary-i386/Packages", examplePackagesFile)
-	s.downloader.ExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb", "xyz")
 
-	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false, 0, nil)
+	err = s.repo.DownloadPackageIndexes(s.progress, s.downloader, s.collectionFactory, false)
 	c.Assert(err, IsNil)
 	c.Assert(s.downloader.Empty(), Equals, true)
+
+	queue, size, err := s.repo.BuildDownloadQueue(s.packagePool)
+	c.Check(size, Equals, int64(3))
+	c.Check(queue, HasLen, 1)
+	c.Check(queue[0].RepoURI, Equals, "pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb")
+
+	s.repo.FinalizeDownload()
 	c.Assert(s.repo.packageRefs, NotNil)
 
 	pkg, err := s.collectionFactory.PackageCollection().ByKey(s.repo.packageRefs.Refs[0])
 	c.Assert(err, IsNil)
-
-	result, err := pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
 
 	c.Check(pkg.Name, Equals, "amanda-client")
 }
@@ -279,32 +287,35 @@ func (s *RemoteRepoSuite) TestDownloadWithSources(c *C) {
 	s.downloader.ExpectError("http://mirror.yandex.ru/debian/dists/squeeze/main/source/Sources.bz2", errors.New("HTTP 404"))
 	s.downloader.ExpectError("http://mirror.yandex.ru/debian/dists/squeeze/main/source/Sources.gz", errors.New("HTTP 404"))
 	s.downloader.ExpectResponse("http://mirror.yandex.ru/debian/dists/squeeze/main/source/Sources", exampleSourcesFile)
-	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb", "xyz")
-	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.dsc", "abc")
-	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/access-modifier-checker/access-modifier-checker_1.0.orig.tar.gz", "abcd")
-	s.downloader.AnyExpectResponse("http://mirror.yandex.ru/debian/pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.debian.tar.gz", "abcde")
 
-	err = s.repo.Download(s.progress, s.downloader, s.collectionFactory, s.packagePool, false, 0, nil)
+	err = s.repo.DownloadPackageIndexes(s.progress, s.downloader, s.collectionFactory, false)
 	c.Assert(err, IsNil)
 	c.Assert(s.downloader.Empty(), Equals, true)
+
+	queue, size, err := s.repo.BuildDownloadQueue(s.packagePool)
+	c.Check(size, Equals, int64(15))
+	c.Check(queue, HasLen, 4)
+
+	q := make([]string, 4)
+	for i := range q {
+		q[i] = queue[i].RepoURI
+	}
+	sort.Strings(q)
+	c.Check(q[3], Equals, "pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb")
+	c.Check(q[1], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.dsc")
+	c.Check(q[2], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0.orig.tar.gz")
+	c.Check(q[0], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.debian.tar.gz")
+
+	s.repo.FinalizeDownload()
 	c.Assert(s.repo.packageRefs, NotNil)
 
 	pkg, err := s.collectionFactory.PackageCollection().ByKey(s.repo.packageRefs.Refs[0])
 	c.Assert(err, IsNil)
 
-	result, err := pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
-
 	c.Check(pkg.Name, Equals, "amanda-client")
 
 	pkg, err = s.collectionFactory.PackageCollection().ByKey(s.repo.packageRefs.Refs[1])
 	c.Assert(err, IsNil)
-
-	result, err = pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
-
 	c.Check(pkg.Name, Equals, "access-modifier-checker")
 }
 
@@ -314,22 +325,24 @@ func (s *RemoteRepoSuite) TestDownloadFlat(c *C) {
 	downloader.ExpectError("http://repos.express42.com/virool/precise/Packages.bz2", errors.New("HTTP 404"))
 	downloader.ExpectError("http://repos.express42.com/virool/precise/Packages.gz", errors.New("HTTP 404"))
 	downloader.ExpectResponse("http://repos.express42.com/virool/precise/Packages", examplePackagesFile)
-	downloader.ExpectResponse("http://repos.express42.com/virool/precise/pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb", "xyz")
 
 	err := s.flat.Fetch(downloader, nil)
 	c.Assert(err, IsNil)
 
-	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false, 0, nil)
+	err = s.flat.DownloadPackageIndexes(s.progress, downloader, s.collectionFactory, false)
 	c.Assert(err, IsNil)
 	c.Assert(downloader.Empty(), Equals, true)
+
+	queue, size, err := s.flat.BuildDownloadQueue(s.packagePool)
+	c.Check(size, Equals, int64(3))
+	c.Check(queue, HasLen, 1)
+	c.Check(queue[0].RepoURI, Equals, "pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb")
+
+	s.flat.FinalizeDownload()
 	c.Assert(s.flat.packageRefs, NotNil)
 
 	pkg, err := s.collectionFactory.PackageCollection().ByKey(s.flat.packageRefs.Refs[0])
 	c.Assert(err, IsNil)
-
-	result, err := pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
 
 	c.Check(pkg.Name, Equals, "amanda-client")
 }
@@ -345,34 +358,38 @@ func (s *RemoteRepoSuite) TestDownloadWithSourcesFlat(c *C) {
 	downloader.ExpectError("http://repos.express42.com/virool/precise/Sources.bz2", errors.New("HTTP 404"))
 	downloader.ExpectError("http://repos.express42.com/virool/precise/Sources.gz", errors.New("HTTP 404"))
 	downloader.ExpectResponse("http://repos.express42.com/virool/precise/Sources", exampleSourcesFile)
-	downloader.AnyExpectResponse("http://repos.express42.com/virool/precise/pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb", "xyz")
-	downloader.AnyExpectResponse("http://repos.express42.com/virool/precise/pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.dsc", "abc")
-	downloader.AnyExpectResponse("http://repos.express42.com/virool/precise/pool/main/a/access-modifier-checker/access-modifier-checker_1.0.orig.tar.gz", "abcd")
-	downloader.AnyExpectResponse("http://repos.express42.com/virool/precise/pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.debian.tar.gz", "abcde")
 
 	err := s.flat.Fetch(downloader, nil)
 	c.Assert(err, IsNil)
 
-	err = s.flat.Download(s.progress, downloader, s.collectionFactory, s.packagePool, false, 0, nil)
+	err = s.flat.DownloadPackageIndexes(s.progress, downloader, s.collectionFactory, false)
 	c.Assert(err, IsNil)
 	c.Assert(downloader.Empty(), Equals, true)
+
+	queue, size, err := s.flat.BuildDownloadQueue(s.packagePool)
+	c.Check(size, Equals, int64(15))
+	c.Check(queue, HasLen, 4)
+
+	q := make([]string, 4)
+	for i := range q {
+		q[i] = queue[i].RepoURI
+	}
+	sort.Strings(q)
+	c.Check(q[3], Equals, "pool/main/a/amanda/amanda-client_3.3.1-3~bpo60+1_amd64.deb")
+	c.Check(q[1], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.dsc")
+	c.Check(q[2], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0.orig.tar.gz")
+	c.Check(q[0], Equals, "pool/main/a/access-modifier-checker/access-modifier-checker_1.0-4.debian.tar.gz")
+
+	s.flat.FinalizeDownload()
 	c.Assert(s.flat.packageRefs, NotNil)
 
 	pkg, err := s.collectionFactory.PackageCollection().ByKey(s.flat.packageRefs.Refs[0])
 	c.Assert(err, IsNil)
 
-	result, err := pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
-
 	c.Check(pkg.Name, Equals, "amanda-client")
 
 	pkg, err = s.collectionFactory.PackageCollection().ByKey(s.flat.packageRefs.Refs[1])
 	c.Assert(err, IsNil)
-
-	result, err = pkg.VerifyFiles(s.packagePool)
-	c.Check(result, Equals, true)
-	c.Check(err, IsNil)
 
 	c.Check(pkg.Name, Equals, "access-modifier-checker")
 }
@@ -399,7 +416,7 @@ func (s *RemoteRepoCollectionSuite) TestAddByName(c *C) {
 	r, err := s.collection.ByName("yandex")
 	c.Assert(err, ErrorMatches, "*.not found")
 
-	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false)
+	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
 	c.Assert(s.collection.Add(repo), IsNil)
 	c.Assert(s.collection.Add(repo), ErrorMatches, ".*already exists")
 
@@ -417,7 +434,7 @@ func (s *RemoteRepoCollectionSuite) TestByUUID(c *C) {
 	r, err := s.collection.ByUUID("some-uuid")
 	c.Assert(err, ErrorMatches, "*.not found")
 
-	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false)
+	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
 	c.Assert(s.collection.Add(repo), IsNil)
 
 	r, err = s.collection.ByUUID(repo.UUID)
@@ -426,7 +443,7 @@ func (s *RemoteRepoCollectionSuite) TestByUUID(c *C) {
 }
 
 func (s *RemoteRepoCollectionSuite) TestUpdateLoadComplete(c *C) {
-	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false)
+	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
 	c.Assert(s.collection.Update(repo), IsNil)
 
 	collection := NewRemoteRepoCollection(s.db)
@@ -447,7 +464,7 @@ func (s *RemoteRepoCollectionSuite) TestUpdateLoadComplete(c *C) {
 }
 
 func (s *RemoteRepoCollectionSuite) TestForEachAndLen(c *C) {
-	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false)
+	repo, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
 	s.collection.Add(repo)
 
 	count := 0
@@ -469,10 +486,10 @@ func (s *RemoteRepoCollectionSuite) TestForEachAndLen(c *C) {
 }
 
 func (s *RemoteRepoCollectionSuite) TestDrop(c *C) {
-	repo1, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false)
+	repo1, _ := NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
 	s.collection.Add(repo1)
 
-	repo2, _ := NewRemoteRepo("tyndex", "http://mirror.yandex.ru/debian/", "wheezy", []string{"main"}, []string{}, false)
+	repo2, _ := NewRemoteRepo("tyndex", "http://mirror.yandex.ru/debian/", "wheezy", []string{"main"}, []string{}, false, false)
 	s.collection.Add(repo2)
 
 	r1, _ := s.collection.ByUUID(repo1.UUID)

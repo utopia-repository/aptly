@@ -26,12 +26,15 @@ type ConfigStructure struct {
 
 // S3PublishRoot describes single S3 publishing entry point
 type S3PublishRoot struct {
-	Region          string `json:"region"`
-	Bucket          string `json:"bucket"`
-	AccessKeyID     string `json:"awsAccessKeyID"`
-	SecretAccessKey string `json:"awsSecretAccessKey"`
-	Prefix          string `json:"prefix"`
-	ACL             string `json:"acl"`
+	Region           string `json:"region"`
+	Bucket           string `json:"bucket"`
+	AccessKeyID      string `json:"awsAccessKeyID"`
+	SecretAccessKey  string `json:"awsSecretAccessKey"`
+	Prefix           string `json:"prefix"`
+	ACL              string `json:"acl"`
+	StorageClass     string `json:"storageClass"`
+	EncryptionMethod string `json:"encryptionMethod"`
+	PlusWorkaround   bool   `json:"plusWorkaround"`
 }
 
 // Config is configuration for aptly, shared by all modules

@@ -8,7 +8,7 @@ import (
 )
 
 func getVerifier(flags *flag.FlagSet) (utils.Verifier, error) {
-	if context.Config().GpgDisableVerify || flags.Lookup("ignore-signatures").Value.Get().(bool) {
+	if LookupOption(context.Config().GpgDisableVerify, flags, "ignore-signatures") {
 		return nil, nil
 	}
 
@@ -56,6 +56,7 @@ func makeCmdMirror() *commander.Command {
 			makeCmdMirrorUpdate(),
 			makeCmdMirrorRename(),
 			makeCmdMirrorEdit(),
+			makeCmdMirrorSearch(),
 		},
 	}
 }

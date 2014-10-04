@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/utils"
+	"github.com/smira/go-ftp-protocol/protocol"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -47,11 +48,12 @@ type downloadTask struct {
 func NewDownloader(threads int, downLimit int64, progress aptly.Progress) aptly.Downloader {
 	transport := *http.DefaultTransport.(*http.Transport)
 	transport.DisableCompression = true
+	transport.RegisterProtocol("ftp", &protocol.FTPRoundTripper{})
 
 	downloader := &downloaderImpl{
 		queue:    make(chan *downloadTask, 1000),
-		stop:     make(chan struct{}),
-		stopped:  make(chan struct{}),
+		stop:     make(chan struct{}, threads),
+		stopped:  make(chan struct{}, threads),
 		pause:    make(chan struct{}),
 		unpause:  make(chan struct{}),
 		threads:  threads,
@@ -83,6 +85,13 @@ func (downloader *downloaderImpl) Shutdown() {
 
 	for i := 0; i < downloader.threads; i++ {
 		<-downloader.stopped
+	}
+}
+
+// Abort stops downloader but doesn't wait for downloader to stop
+func (downloader *downloaderImpl) Abort() {
+	for i := 0; i < downloader.threads; i++ {
+		downloader.stop <- struct{}{}
 	}
 }
 
@@ -122,10 +131,12 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 
 	resp, err := downloader.client.Get(task.url)
 	if err != nil {
-		task.result <- err
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
-	defer resp.Body.Close()
+	if resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		task.result <- fmt.Errorf("HTTP code %d while fetching %s", resp.StatusCode, task.url)
@@ -134,7 +145,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 
 	err = os.MkdirAll(filepath.Dir(task.destination), 0755)
 	if err != nil {
-		task.result <- err
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
 
@@ -142,7 +153,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 
 	outfile, err := os.Create(temppath)
 	if err != nil {
-		task.result <- err
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
 	defer outfile.Close()
@@ -159,7 +170,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		os.Remove(temppath)
-		task.result <- err
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
 
@@ -190,7 +201,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 	err = os.Rename(temppath, task.destination)
 	if err != nil {
 		os.Remove(temppath)
-		task.result <- err
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
 

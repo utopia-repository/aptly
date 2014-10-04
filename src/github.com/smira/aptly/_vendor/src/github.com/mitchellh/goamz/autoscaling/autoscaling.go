@@ -4,12 +4,13 @@ package autoscaling
 
 import (
 	"encoding/xml"
-	"github.com/mitchellh/goamz/aws"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/goamz/aws"
 )
 
 // The AutoScaling type encapsulates operations operations with the autoscaling endpoint.
@@ -109,11 +110,13 @@ type LoadBalancerName struct {
 }
 
 type LaunchConfiguration struct {
-	ImageId        string          `xml:"member>ImageId"`
-	InstanceType   string          `xml:"member>InstanceType"`
-	KeyName        string          `xml:"member>KeyName"`
-	Name           string          `xml:"member>LaunchConfigurationName"`
-	SecurityGroups []SecurityGroup `xml:"member>SecurityGroups"`
+	IamInstanceProfile string          `xml:"member>IamInstanceProfile"`
+	ImageId            string          `xml:"member>ImageId"`
+	InstanceType       string          `xml:"member>InstanceType"`
+	KeyName            string          `xml:"member>KeyName"`
+	Name               string          `xml:"member>LaunchConfigurationName"`
+	SecurityGroups     []SecurityGroup `xml:"member>SecurityGroups"`
+	UserData           []byte          `xml:"member>UserData"`
 }
 
 type AutoScalingGroup struct {
@@ -147,6 +150,7 @@ type CreateAutoScalingGroup struct {
 	MaxSize                 int
 	MinSize                 int
 	PlacementGroup          string
+	TerminationPolicies     []string
 	Name                    string
 	Tags                    []Tag
 	VPCZoneIdentifier       []string
@@ -212,6 +216,10 @@ func (autoscaling *AutoScaling) CreateAutoScalingGroup(options *CreateAutoScalin
 		params["Tag.member."+strconv.Itoa(j+1)+".Value"] = tag.Value
 	}
 
+	for i, v := range options.TerminationPolicies {
+		params["TerminationPolicies.member."+strconv.Itoa(i+1)] = v
+	}
+
 	if options.VPCZoneIdentifier != nil {
 		params["VPCZoneIdentifier"] = strings.Join(options.VPCZoneIdentifier, ",")
 	}
@@ -235,6 +243,7 @@ type CreateLaunchConfiguration struct {
 	KeyName        string
 	Name           string
 	SecurityGroups []string
+	UserData       string
 }
 
 func (autoscaling *AutoScaling) CreateLaunchConfiguration(options *CreateLaunchConfiguration) (resp *SimpleResp, err error) {
@@ -258,6 +267,12 @@ func (autoscaling *AutoScaling) CreateLaunchConfiguration(options *CreateLaunchC
 
 	for i, v := range options.SecurityGroups {
 		params["SecurityGroups.member."+strconv.Itoa(i+1)] = v
+	}
+
+	if options.UserData != "" {
+		userData := make([]byte, b64.EncodedLen(len(options.UserData)))
+		b64.Encode(userData, []byte(options.UserData))
+		params["UserData"] = string(userData)
 	}
 
 	resp = &SimpleResp{}
@@ -389,6 +404,7 @@ type UpdateAutoScalingGroup struct {
 	MaxSize                 int
 	MinSize                 int
 	PlacementGroup          string
+	TerminationPolicies     []string
 	Name                    string
 	VPCZoneIdentifier       []string
 
@@ -440,6 +456,9 @@ func (autoscaling *AutoScaling) UpdateAutoScalingGroup(options *UpdateAutoScalin
 
 	if options.PlacementGroup != "" {
 		params["PlacementGroup"] = options.PlacementGroup
+	}
+	for i, v := range options.TerminationPolicies {
+		params["TerminationPolicies.member."+strconv.Itoa(i+1)] = v
 	}
 
 	if options.VPCZoneIdentifier != nil {

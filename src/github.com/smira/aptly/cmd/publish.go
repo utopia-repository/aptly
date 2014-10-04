@@ -8,13 +8,14 @@ import (
 )
 
 func getSigner(flags *flag.FlagSet) (utils.Signer, error) {
-	if flags.Lookup("skip-signing").Value.Get().(bool) || context.Config().GpgDisableSign {
+	if LookupOption(context.Config().GpgDisableSign, flags, "skip-signing") {
 		return nil, nil
 	}
 
 	signer := &utils.GpgSigner{}
 	signer.SetKey(flags.Lookup("gpg-key").Value.String())
 	signer.SetKeyRing(flags.Lookup("keyring").Value.String(), flags.Lookup("secret-keyring").Value.String())
+	signer.SetPassphrase(flags.Lookup("passphrase").Value.String(), flags.Lookup("passphrase-file").Value.String())
 
 	err := signer.Init()
 	if err != nil {
