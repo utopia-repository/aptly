@@ -34,6 +34,18 @@ func ListPackagesRefList(reflist *deb.PackageRefList) (err error) {
 	return
 }
 
+// LookupOption checks boolean flag with default (usually config) and command-line
+// setting
+func LookupOption(defaultValue bool, flags *flag.FlagSet, name string) (result bool) {
+	result = defaultValue
+
+	if flags.IsSet(name) {
+		result = flags.Lookup(name).Value.Get().(bool)
+	}
+
+	return
+}
+
 // RootCommand creates root command in command tree
 func RootCommand() *commander.Command {
 	cmd := &commander.Command{
@@ -46,9 +58,9 @@ upgrade individual packages, take snapshots and publish them
 back as Debian repositories.
 
 aptly's goal is to establish repeatability and controlled changes
-in a package-centric environment. aptly allows to fix a set of packages
+in a package-centric environment. aptly allows one to fix a set of packages
 in a repository, so that package installation and upgrade becomes
-deterministic. At the same time aptly allows to perform controlled,
+deterministic. At the same time aptly allows one to perform controlled,
 fine-grained changes in repository contents to transition your
 package environment to new version.`,
 		Flag: *flag.NewFlagSet("aptly", flag.ExitOnError),
@@ -59,8 +71,11 @@ package environment to new version.`,
 			makeCmdRepo(),
 			makeCmdServe(),
 			makeCmdSnapshot(),
+			// Disabled on no docs
+			//makeCmdTask(),
 			makeCmdPublish(),
 			makeCmdVersion(),
+			makeCmdPackage(),
 		},
 	}
 

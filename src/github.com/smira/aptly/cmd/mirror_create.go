@@ -16,7 +16,8 @@ func aptlyMirrorCreate(cmd *commander.Command, args []string) error {
 		return commander.ErrCommandError
 	}
 
-	downloadSources := context.Config().DownloadSourcePackages || context.flags.Lookup("with-sources").Value.Get().(bool)
+	downloadSources := LookupOption(context.Config().DownloadSourcePackages, context.flags, "with-sources")
+	downloadUdebs := context.flags.Lookup("with-udebs").Value.Get().(bool)
 
 	var (
 		mirrorName, archiveURL, distribution string
@@ -33,7 +34,8 @@ func aptlyMirrorCreate(cmd *commander.Command, args []string) error {
 		archiveURL, distribution, components = args[1], args[2], args[3:]
 	}
 
-	repo, err := deb.NewRemoteRepo(mirrorName, archiveURL, distribution, components, context.ArchitecturesList(), downloadSources)
+	repo, err := deb.NewRemoteRepo(mirrorName, archiveURL, distribution, components, context.ArchitecturesList(),
+		downloadSources, downloadUdebs)
 	if err != nil {
 		return fmt.Errorf("unable to create mirror: %s", err)
 	}
@@ -74,7 +76,7 @@ func makeCmdMirrorCreate() *commander.Command {
 		Short:     "create new mirror",
 		Long: `
 Creates mirror <name> of remote repository, aptly supports both regular and flat Debian repositories exported
-via HTTP. aptly would try download Release file from remote repository and verify its' signature. Command
+via HTTP and FTP. aptly would try download Release file from remote repository and verify its' signature. Command
 line format resembles apt utlitily sources.list(5).
 
 PPA urls could specified in short format:
@@ -90,6 +92,7 @@ Example:
 
 	cmd.Flag.Bool("ignore-signatures", false, "disable verification of Release file signatures")
 	cmd.Flag.Bool("with-sources", false, "download source packages in addition to binary packages")
+	cmd.Flag.Bool("with-udebs", false, "download .udeb packages (Debian installer support)")
 	cmd.Flag.String("filter", "", "filter packages in mirror")
 	cmd.Flag.Bool("filter-with-deps", false, "when filtering, include dependencies of matching packages as well")
 	cmd.Flag.Var(&keyRingsFlag{}, "keyring", "gpg keyring to use when verifying Release file (could be specified multiple times)")

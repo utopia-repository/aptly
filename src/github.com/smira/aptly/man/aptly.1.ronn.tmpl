@@ -18,8 +18,9 @@ aptly has integrated help that matches contents of this manual page, to get help
 
 ## CONFIGURATION
 
-aptly looks for configuration file in `/etc/aptly.conf` and `~/.aptly.conf`, if no config file
-found, new one is created. If `-config=` flag is specified, aptly would use config file at specified
+aptly looks for configuration file first in `~/.aptly.conf` then
+in `/etc/aptly.conf` and, if no config file found, new one is created in
+home directory. If `-config=` flag is specified, aptly would use config file at specified
 location. Also aptly needs root directory for database, package and published repository storage.
 If not specified, directory defaults to `~/.aptly`, it will be created if missing.
 
@@ -46,7 +47,10 @@ Configuration file is stored in JSON format (default values shown below):
           "awsAccessKeyID": ""
           "awsSecretAccessKey": "",
           "prefix": "",
-          "acl": "public-read"
+          "acl": "public-read",
+          "storageClass": "",
+          "encryptionMethod": "",
+          "plusWorkaround": false
         }
     }
 
@@ -94,7 +98,7 @@ Options:
     specifies paramaters for short PPA url expansion, if left blank they default
     to output of `lsb_release` command
 
-  * `S3PublisEndpoints`:
+  * `S3PublishEndpoints`:
     configuration of Amazon S3 publishing endpoints (see below)
 
 ## S3 PUBLISHING ENDPOINTS
@@ -120,6 +124,20 @@ and associated settings:
      (optional) Amazon credentials to access S3 bucket. If not supplied,
      environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
      are used.
+   * `storageClass`:
+     (optional) Amazon S3 storage class, defaults to `STANDARD`. Other values
+     available: `REDUCED_REDUNDANCY` (lower price, lower redundancy)
+   * `encryptionMethod`:
+     (optional) server-side encryption method, defaults to none. Currently
+     the only available encryption method is `AES256`
+   * `plusWorkaround`:
+     (optional) workaround misbehavior in apt and Amazon S3
+     for files with `+` in filename by
+     creating two copies of package files with `+` in filename: one original
+     and another one with spaces instead of plus signs
+     With `plusWorkaround` enabled, package files with plus sign
+     would be stored twice. aptly might not cleanup files with spaces when published
+     repository is dropped or updated (switched) to new version of repository (snapshot).
 
 In order to publish to S3, specify endpoint as `s3:endpoint-name:` before
 publishing prefix on the command line, e.g.:
@@ -218,6 +236,8 @@ When specified on command line, query may have to be quoted according to shell r
 {{template "command" findCommand . "snapshot"}}
 
 {{template "command" findCommand . "publish"}}
+
+{{template "command" findCommand . "package"}}
 
 {{template "command" findCommand . "db"}}
 

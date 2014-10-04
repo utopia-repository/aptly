@@ -7,6 +7,26 @@ var ErrorDump = `
 </Error></Errors><RequestID>0503f4e9-bbd6-483c-b54f-c4ae9f3b30f4</RequestID></Response>
 `
 
+// http://goo.gl/OkMdtJ
+var AddTagsExample = `
+<AddTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2012-06-01/">
+  <AddTagsResult/>
+  <ResponseMetadata>
+    <RequestId>360e81f7-1100-11e4-b6ed-0f30EXAMPLE</RequestId>
+  </ResponseMetadata>
+</AddTagsResponse>
+`
+
+// http://goo.gl/nT2E89
+var RemoveTagsExample = `
+<RemoveTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2012-06-01/">
+  <RemoveTagsResult/>
+  <ResponseMetadata>
+    <RequestId>83c88b9d-12b7-11e3-8b82-87b12EXAMPLE</RequestId>
+  </ResponseMetadata>
+</RemoveTagsResponse>
+`
+
 // http://goo.gl/gQRD2H
 var CreateLoadBalancerExample = `
 <CreateLoadBalancerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2012-06-01/">
@@ -51,6 +71,7 @@ var DescribeLoadBalancersExample = `
                 <Protocol>HTTP</Protocol>
                 <LoadBalancerPort>80</LoadBalancerPort>
                 <InstanceProtocol>HTTP</InstanceProtocol>
+                <SSLCertificateId>needToAddASSLCertToYourAWSAccount</SSLCertificateId>
                 <InstancePort>80</InstancePort>
               </Listener>
             </member>
@@ -119,6 +140,23 @@ var DeregisterInstancesFromLoadBalancerExample = `
 </DeregisterInstancesFromLoadBalancerResponse>
 `
 
+// http://docs.aws.amazon.com/ElasticLoadBalancing/latest/APIReference/API_ConfigureHealthCheck.html
+var ConfigureHealthCheckExample = `
+<ConfigureHealthCheckResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2012-06-01/">
+<ConfigureHealthCheckResult>
+    <HealthCheck>
+      <Interval>30</Interval>
+      <Target>HTTP:80/ping</Target>
+      <HealthyThreshold>2</HealthyThreshold>
+      <Timeout>3</Timeout>
+      <UnhealthyThreshold>2</UnhealthyThreshold>
+    </HealthCheck>
+</ConfigureHealthCheckResult>
+<ResponseMetadata>
+    <RequestId>83c88b9d-12b7-11e3-8b82-87b12EXAMPLE</RequestId>
+</ResponseMetadata>
+</ConfigureHealthCheckResponse>`
+
 // http://goo.gl/cGNxfj
 var DescribeInstanceHealthExample = `
 <DescribeInstanceHealthResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2012-06-01/">
@@ -128,6 +166,12 @@ var DescribeInstanceHealthExample = `
         <Description>N/A</Description>
         <InstanceId>i-90d8c2a5</InstanceId>
         <State>InService</State>
+        <ReasonCode>N/A</ReasonCode>
+      </member>
+      <member>
+        <Description>N/A</Description>
+        <InstanceId>i-06ea3e60</InstanceId>
+        <State>OutOfService</State>
         <ReasonCode>N/A</ReasonCode>
       </member>
     </InstanceStates>

@@ -619,7 +619,7 @@ type request struct {
 // amazonShouldEscape returns true if byte should be escaped
 func amazonShouldEscape(c byte) bool {
 	return !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '~' || c == '.' || c == '/')
+		(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '~' || c == '.' || c == '/' || c == ':')
 }
 
 // amazonEscape does uri escaping exactly as Amazon does
@@ -706,22 +706,6 @@ func (s3 *S3) prepare(req *request) error {
 			req.path = "/" + req.path
 		}
 		req.signpath = req.path
-		// signpath includes subresource, if present: "?acl", "?delete", "?location", "?logging", or "?torrent"
-		if req.params["acl"] != nil {
-			req.signpath += "?acl"
-		}
-		if req.params["delete"] != nil {
-			req.signpath += "?delete"
-		}
-		if req.params["location"] != nil {
-			req.signpath += "?location"
-		}
-		if req.params["logging"] != nil {
-			req.signpath += "?logging"
-		}
-		if req.params["torrent"] != nil {
-			req.signpath += "?torrent"
-		}
 
 		if req.bucket != "" {
 			req.baseurl = s3.Region.S3BucketEndpoint

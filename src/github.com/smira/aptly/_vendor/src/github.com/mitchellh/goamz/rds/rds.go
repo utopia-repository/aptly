@@ -90,23 +90,24 @@ func makeParams(action string) map[string]string {
 // Rds objects
 
 type DBInstance struct {
-	Address                    string   `xml:"Endpoint>Address"`
-	AllocatedStorage           int      `xml:"AllocatedStorage"`
-	AvailabilityZone           string   `xml:"AvailabilityZone"`
-	BackupRetentionPeriod      int      `xml:"BackupRetentionPeriod"`
-	DBInstanceClass            string   `xml:"DBInstanceClass"`
-	DBInstanceIdentifier       string   `xml:"DBInstanceIdentifier"`
-	DBInstanceStatus           string   `xml:"DBInstanceStatus"`
-	DBName                     string   `xml:"DBName"`
-	Engine                     string   `xml:"Engine"`
-	EngineVersion              string   `xml:"EngineVersion"`
-	MasterUsername             string   `xml:"MasterUsername"`
-	MultiAZ                    bool     `xml:"MultiAZ"`
-	Port                       int      `xml:"Endpoint>Port"`
-	PreferredBackupWindow      string   `xml:"PreferredBackupWindow"`
-	PreferredMaintenanceWindow string   `xml:"PreferredMaintenanceWindow"`
-	VpcSecurityGroupIds        []string `xml:"VpcSecurityGroups"`
-	DBSecurityGroupNames       []string `xml:"DBSecurityGroups>DBSecurityGroup>DBSecurityGroupName"`
+	Address                    string        `xml:"Endpoint>Address"`
+	AllocatedStorage           int           `xml:"AllocatedStorage"`
+	AvailabilityZone           string        `xml:"AvailabilityZone"`
+	BackupRetentionPeriod      int           `xml:"BackupRetentionPeriod"`
+	DBInstanceClass            string        `xml:"DBInstanceClass"`
+	DBInstanceIdentifier       string        `xml:"DBInstanceIdentifier"`
+	DBInstanceStatus           string        `xml:"DBInstanceStatus"`
+	DBName                     string        `xml:"DBName"`
+	Engine                     string        `xml:"Engine"`
+	EngineVersion              string        `xml:"EngineVersion"`
+	MasterUsername             string        `xml:"MasterUsername"`
+	MultiAZ                    bool          `xml:"MultiAZ"`
+	Port                       int           `xml:"Endpoint>Port"`
+	PreferredBackupWindow      string        `xml:"PreferredBackupWindow"`
+	PreferredMaintenanceWindow string        `xml:"PreferredMaintenanceWindow"`
+	VpcSecurityGroupIds        []string      `xml:"VpcSecurityGroups"`
+	DBSecurityGroupNames       []string      `xml:"DBSecurityGroups>DBSecurityGroup>DBSecurityGroupName"`
+	DBSubnetGroup              DBSubnetGroup `xml:"DBSubnetGroup"`
 }
 
 type DBSecurityGroup struct {
@@ -117,6 +118,35 @@ type DBSecurityGroup struct {
 	EC2SecurityGroupStatuses []string `xml:"EC2SecurityGroups>EC2SecurityGroup>Status"`
 	CidrIps                  []string `xml:"IPRanges>IPRange>CIDRIP"`
 	CidrStatuses             []string `xml:"IPRanges>IPRange>Status"`
+}
+
+type DBSubnetGroup struct {
+	Description string   `xml:"DBSubnetGroupDescription"`
+	Name        string   `xml:"DBSubnetGroupName"`
+	Status      string   `xml:"SubnetGroupStatus"`
+	SubnetIds   []string `xml:"Subnets>Subnet>SubnetIdentifier"`
+	VpcId       string   `xml:"VpcId"`
+}
+
+type DBSnapshot struct {
+	AllocatedStorage     int    `xml:"AllocatedStorage"`
+	AvailabilityZone     string `xml:"AvailabilityZone"`
+	DBInstanceIdentifier string `xml:"DBInstanceIdentifier"`
+	DBSnapshotIdentifier string `xml:"DBSnapshotIdentifier"`
+	Engine               string `xml:"Engine"`
+	EngineVersion        string `xml:"EngineVersion"`
+	InstanceCreateTime   string `xml:"InstanceCreateTime"`
+	Iops                 int    `xml:"Iops"`
+	LicenseModel         string `xml:"LicenseModel"`
+	MasterUsername       string `xml:"MasterUsername"`
+	OptionGroupName      string `xml:"OptionGroupName"`
+	PercentProgress      int    `xml:"PercentProgress"`
+	Port                 int    `xml:"Port"`
+	SnapshotCreateTime   string `xml:"SnapshotCreateTime"`
+	SnapshotType         string `xml:"SnapshotType"`
+	SourceRegion         string `xml:"SourceRegion"`
+	Status               string `xml:"Status"`
+	VpcId                string `xml:"VpcId"`
 }
 
 // ----------------------------------------------------------------------------
@@ -194,7 +224,7 @@ func (rds *Rds) CreateDBInstance(options *CreateDBInstance) (resp *SimpleResp, e
 	}
 
 	if options.EngineVersion != "" {
-		params["Engine"] = options.EngineVersion
+		params["EngineVersion"] = options.EngineVersion
 	}
 
 	if options.MasterUsername != "" {
@@ -251,6 +281,34 @@ func (rds *Rds) CreateDBSecurityGroup(options *CreateDBSecurityGroup) (resp *Sim
 
 	params["DBSecurityGroupName"] = options.DBSecurityGroupName
 	params["DBSecurityGroupDescription"] = options.DBSecurityGroupDescription
+
+	resp = &SimpleResp{}
+
+	err = rds.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+// The CreateDBSubnetGroup request parameters
+type CreateDBSubnetGroup struct {
+	DBSubnetGroupName        string
+	DBSubnetGroupDescription string
+	SubnetIds                []string
+}
+
+func (rds *Rds) CreateDBSubnetGroup(options *CreateDBSubnetGroup) (resp *SimpleResp, err error) {
+	params := makeParams("CreateDBSubnetGroup")
+
+	params["DBSubnetGroupName"] = options.DBSubnetGroupName
+	params["DBSubnetGroupDescription"] = options.DBSubnetGroupDescription
+
+	for j, group := range options.SubnetIds {
+		params["SubnetIds.member."+strconv.Itoa(j+1)] = group
+	}
 
 	resp = &SimpleResp{}
 
@@ -358,10 +416,75 @@ func (rds *Rds) DescribeDBSecurityGroups(options *DescribeDBSecurityGroups) (res
 	return
 }
 
+// DescribeDBSubnetGroups request params
+type DescribeDBSubnetGroups struct {
+	DBSubnetGroupName string
+}
+
+type DescribeDBSubnetGroupsResp struct {
+	RequestId      string          `xml:"ResponseMetadata>RequestId"`
+	DBSubnetGroups []DBSubnetGroup `xml:"DescribeDBSubnetGroupsResult>DBSubnetGroups>DBSubnetGroup"`
+}
+
+func (rds *Rds) DescribeDBSubnetGroups(options *DescribeDBSubnetGroups) (resp *DescribeDBSubnetGroupsResp, err error) {
+	params := makeParams("DescribeDBSubnetGroups")
+
+	params["DBSubnetGroupName"] = options.DBSubnetGroupName
+
+	resp = &DescribeDBSubnetGroupsResp{}
+
+	err = rds.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+// DescribeDBSnapshots request params
+type DescribeDBSnapshots struct {
+	DBInstanceIdentifier string
+	DBSnapshotIdentifier string
+	SnapshotType         string
+}
+
+type DescribeDBSnapshotsResp struct {
+	RequestId   string       `xml:"ResponseMetadata>RequestId"`
+	DBSnapshots []DBSnapshot `xml:"DescribeDBSnapshotsResult>DBSnapshots>DBSnapshot"`
+}
+
+func (rds *Rds) DescribeDBSnapshots(options *DescribeDBSnapshots) (resp *DescribeDBSnapshotsResp, err error) {
+	params := makeParams("DescribeDBSnapshots")
+
+	if options.DBInstanceIdentifier != "" {
+		params["DBInstanceIdentifier"] = options.DBInstanceIdentifier
+	}
+
+	if options.DBSnapshotIdentifier != "" {
+		params["DBSnapshotIdentifier"] = options.DBSnapshotIdentifier
+	}
+
+	if options.SnapshotType != "" {
+		params["SnapshotType"] = options.SnapshotType
+	}
+
+	resp = &DescribeDBSnapshotsResp{}
+
+	err = rds.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
 // DeleteDBInstance request params
 type DeleteDBInstance struct {
-	DBInstanceIdentifier string
-	SkipFinalSnapshot    bool
+	FinalDBSnapshotIdentifier string
+	DBInstanceIdentifier      string
+	SkipFinalSnapshot         bool
 }
 
 func (rds *Rds) DeleteDBInstance(options *DeleteDBInstance) (resp *SimpleResp, err error) {
@@ -369,8 +492,12 @@ func (rds *Rds) DeleteDBInstance(options *DeleteDBInstance) (resp *SimpleResp, e
 
 	params["DBInstanceIdentifier"] = options.DBInstanceIdentifier
 
+	// If we don't skip the final snapshot, we need to specify a final
+	// snapshot identifier
 	if options.SkipFinalSnapshot {
 		params["SkipFinalSnapshot"] = "true"
+	} else {
+		params["FinalDBSnapshotIdentifier"] = options.FinalDBSnapshotIdentifier
 	}
 
 	resp = &SimpleResp{}
@@ -393,6 +520,112 @@ func (rds *Rds) DeleteDBSecurityGroup(options *DeleteDBSecurityGroup) (resp *Sim
 	params := makeParams("DeleteDBSecurityGroup")
 
 	params["DBSecurityGroupName"] = options.DBSecurityGroupName
+
+	resp = &SimpleResp{}
+
+	err = rds.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+// DeleteDBSubnetGroup request params
+type DeleteDBSubnetGroup struct {
+	DBSubnetGroupName string
+}
+
+func (rds *Rds) DeleteDBSubnetGroup(options *DeleteDBSubnetGroup) (resp *SimpleResp, err error) {
+	params := makeParams("DeleteDBSubnetGroup")
+
+	params["DBSubnetGroupName"] = options.DBSubnetGroupName
+
+	resp = &SimpleResp{}
+
+	err = rds.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+type RestoreDBInstanceFromDBSnapshot struct {
+	DBInstanceIdentifier    string
+	DBSnapshotIdentifier    string
+	AutoMinorVersionUpgrade bool
+	AvailabilityZone        string
+	DBInstanceClass         string
+	DBName                  string
+	DBSubnetGroupName       string
+	Engine                  string
+	Iops                    int
+	LicenseModel            string
+	MultiAZ                 bool
+	OptionGroupName         string
+	Port                    int
+	PubliclyAccessible      bool
+
+	SetIops bool
+	SetPort bool
+}
+
+func (rds *Rds) RestoreDBInstanceFromDBSnapshot(options *RestoreDBInstanceFromDBSnapshot) (resp *SimpleResp, err error) {
+	params := makeParams("RestoreDBInstanceFromDBSnapshot")
+
+	params["DBInstanceIdentifier"] = options.DBInstanceIdentifier
+	params["DBSnapshotIdentifier"] = options.DBSnapshotIdentifier
+
+	if options.AutoMinorVersionUpgrade {
+		params["AutoMinorVersionUpgrade"] = "true"
+	}
+
+	if options.AvailabilityZone != "" {
+		params["AvailabilityZone"] = options.AvailabilityZone
+	}
+
+	if options.DBInstanceClass != "" {
+		params["DBInstanceClass"] = options.DBInstanceClass
+	}
+
+	if options.DBName != "" {
+		params["DBName"] = options.DBName
+	}
+
+	if options.DBSubnetGroupName != "" {
+		params["DBSubnetGroupName"] = options.DBSubnetGroupName
+	}
+
+	if options.Engine != "" {
+		params["Engine"] = options.Engine
+	}
+
+	if options.SetIops {
+		params["Iops"] = strconv.Itoa(options.Iops)
+	}
+
+	if options.LicenseModel != "" {
+		params["LicenseModel"] = options.LicenseModel
+	}
+
+	if options.MultiAZ {
+		params["MultiAZ"] = "true"
+	}
+
+	if options.OptionGroupName != "" {
+		params["OptionGroupName"] = options.OptionGroupName
+	}
+
+	if options.SetPort {
+		params["Port"] = strconv.Itoa(options.Port)
+	}
+
+	if options.PubliclyAccessible {
+		params["PubliclyAccessible"] = "true"
+	}
 
 	resp = &SimpleResp{}
 

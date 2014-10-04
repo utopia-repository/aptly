@@ -9,8 +9,9 @@ package leveldb
 import (
 	"errors"
 	"runtime"
+	"sync"
+	"sync/atomic"
 
-	"github.com/syndtr/goleveldb/leveldb/comparer"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -20,46 +21,61 @@ var (
 	errInvalidIkey = errors.New("leveldb: Iterator: invalid internal key")
 )
 
-func (db *DB) newRawIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator {
-	s := db.s
+type memdbReleaser struct {
+	once sync.Once
+	m    *memDB
+}
 
+func (mr *memdbReleaser) Release() {
+	mr.once.Do(func() {
+		mr.m.decref()
+	})
+}
+
+func (db *DB) newRawIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator {
 	em, fm := db.getMems()
-	v := s.version()
+	v := db.s.version()
 
 	ti := v.getIterators(slice, ro)
 	n := len(ti) + 2
 	i := make([]iterator.Iterator, 0, n)
-	i = append(i, em.NewIterator(slice))
+	emi := em.mdb.NewIterator(slice)
+	emi.SetReleaser(&memdbReleaser{m: em})
+	i = append(i, emi)
 	if fm != nil {
-		i = append(i, fm.NewIterator(slice))
+		fmi := fm.mdb.NewIterator(slice)
+		fmi.SetReleaser(&memdbReleaser{m: fm})
+		i = append(i, fmi)
 	}
 	i = append(i, ti...)
-	strict := s.o.GetStrict(opt.StrictIterator) || ro.GetStrict(opt.StrictIterator)
-	mi := iterator.NewMergedIterator(i, s.cmp, strict)
+	strict := db.s.o.GetStrict(opt.StrictIterator) || ro.GetStrict(opt.StrictIterator)
+	mi := iterator.NewMergedIterator(i, db.s.icmp, strict)
 	mi.SetReleaser(&versionReleaser{v: v})
 	return mi
 }
 
 func (db *DB) newIterator(seq uint64, slice *util.Range, ro *opt.ReadOptions) *dbIter {
-	var slice_ *util.Range
+	var islice *util.Range
 	if slice != nil {
-		slice_ = &util.Range{}
+		islice = &util.Range{}
 		if slice.Start != nil {
-			slice_.Start = newIKey(slice.Start, kMaxSeq, tSeek)
+			islice.Start = newIKey(slice.Start, kMaxSeq, tSeek)
 		}
 		if slice.Limit != nil {
-			slice_.Limit = newIKey(slice.Limit, kMaxSeq, tSeek)
+			islice.Limit = newIKey(slice.Limit, kMaxSeq, tSeek)
 		}
 	}
-	rawIter := db.newRawIterator(slice_, ro)
+	rawIter := db.newRawIterator(islice, ro)
 	iter := &dbIter{
-		cmp:    db.s.cmp.cmp,
+		db:     db,
+		icmp:   db.s.icmp,
 		iter:   rawIter,
 		seq:    seq,
 		strict: db.s.o.GetStrict(opt.StrictIterator) || ro.GetStrict(opt.StrictIterator),
 		key:    make([]byte, 0),
 		value:  make([]byte, 0),
 	}
+	atomic.AddInt32(&db.aliveIters, 1)
 	runtime.SetFinalizer(iter, (*dbIter).Release)
 	return iter
 }
@@ -76,7 +92,8 @@ const (
 
 // dbIter represent an interator states over a database session.
 type dbIter struct {
-	cmp    comparer.BasicComparer
+	db     *DB
+	icmp   *iComparer
 	iter   iterator.Iterator
 	seq    uint64
 	strict bool
@@ -166,7 +183,7 @@ func (i *dbIter) next() bool {
 					i.key = append(i.key[:0], ukey...)
 					i.dir = dirForward
 				case tVal:
-					if i.dir == dirSOI || i.cmp.Compare(ukey, i.key) > 0 {
+					if i.dir == dirSOI || i.icmp.uCompare(ukey, i.key) > 0 {
 						i.key = append(i.key[:0], ukey...)
 						i.value = append(i.value[:0], i.iter.Value()...)
 						i.dir = dirForward
@@ -211,7 +228,7 @@ func (i *dbIter) prev() bool {
 			ukey, seq, t, ok := parseIkey(i.iter.Key())
 			if ok {
 				if seq <= i.seq {
-					if !del && i.cmp.Compare(ukey, i.key) < 0 {
+					if !del && i.icmp.uCompare(ukey, i.key) < 0 {
 						return true
 					}
 					del = (t == tDel)
@@ -252,7 +269,7 @@ func (i *dbIter) Prev() bool {
 		for i.iter.Prev() {
 			ukey, _, _, ok := parseIkey(i.iter.Key())
 			if ok {
-				if i.cmp.Compare(ukey, i.key) < 0 {
+				if i.icmp.uCompare(ukey, i.key) < 0 {
 					goto cont
 				}
 			} else if i.strict {
@@ -290,6 +307,7 @@ func (i *dbIter) Release() {
 
 		if i.releaser != nil {
 			i.releaser.Release()
+			i.releaser = nil
 		}
 
 		i.dir = dirReleased
@@ -297,13 +315,19 @@ func (i *dbIter) Release() {
 		i.value = nil
 		i.iter.Release()
 		i.iter = nil
+		atomic.AddInt32(&i.db.aliveIters, -1)
+		i.db = nil
 	}
 }
 
 func (i *dbIter) SetReleaser(releaser util.Releaser) {
-	if i.dir != dirReleased {
-		i.releaser = releaser
+	if i.dir == dirReleased {
+		panic(util.ErrReleased)
 	}
+	if i.releaser != nil && releaser != nil {
+		panic(util.ErrHasReleaser)
+	}
+	i.releaser = releaser
 }
 
 func (i *dbIter) Error() error {

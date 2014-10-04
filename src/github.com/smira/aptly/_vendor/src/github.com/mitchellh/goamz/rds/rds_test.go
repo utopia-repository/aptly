@@ -80,6 +80,27 @@ func (s *S) Test_CreateDBSecurityGroup(c *C) {
 	c.Assert(resp.RequestId, Equals, "e68ef6fa-afc1-11c3-845a-476777009d19")
 }
 
+func (s *S) Test_CreateDBSubnetGroup(c *C) {
+	testServer.Response(200, nil, CreateDBSubnetGroupExample)
+
+	options := rds.CreateDBSubnetGroup{
+		DBSubnetGroupName:        "foobarbaz",
+		DBSubnetGroupDescription: "test description",
+		SubnetIds:                []string{"subnet-e4d398a1", "subnet-c2bdb6ba"},
+	}
+
+	resp, err := s.rds.CreateDBSubnetGroup(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"CreateDBSubnetGroup"})
+	c.Assert(req.Form["DBSubnetGroupName"], DeepEquals, []string{"foobarbaz"})
+	c.Assert(req.Form["DBSubnetGroupDescription"], DeepEquals, []string{"test description"})
+	c.Assert(req.Form["SubnetIds.member.1"], DeepEquals, []string{"subnet-e4d398a1"})
+	c.Assert(req.Form["SubnetIds.member.2"], DeepEquals, []string{"subnet-c2bdb6ba"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "3a401b3f-bb9e-11d3-f4c6-37db295f7674")
+}
+
 func (s *S) Test_DescribeDBInstances(c *C) {
 	testServer.Response(200, nil, DescribeDBInstancesExample)
 
@@ -119,6 +140,25 @@ func (s *S) Test_DescribeDBSecurityGroups(c *C) {
 	c.Assert(resp.DBSecurityGroups[0].CidrStatuses, DeepEquals, []string{"authorized", "authorized", "authorized", "authorized"})
 }
 
+func (s *S) Test_DescribeDBSubnetGroups(c *C) {
+	testServer.Response(200, nil, DescribeDBSubnetGroupsExample)
+
+	options := rds.DescribeDBSubnetGroups{
+		DBSubnetGroupName: "foobarbaz",
+	}
+
+	resp, err := s.rds.DescribeDBSubnetGroups(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"DescribeDBSubnetGroups"})
+	c.Assert(req.Form["DBSubnetGroupName"], DeepEquals, []string{"foobarbaz"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "b783db3b-b98c-11d3-fbc7-5c0aad74da7c")
+	c.Assert(resp.DBSubnetGroups[0].Status, DeepEquals, "Complete")
+	c.Assert(resp.DBSubnetGroups[0].SubnetIds, DeepEquals, []string{"subnet-e8b3e5b1", "subnet-44b2f22e"})
+	c.Assert(resp.DBSubnetGroups[0].VpcId, DeepEquals, "vpc-e7abbdce")
+}
+
 func (s *S) Test_DeleteDBInstance(c *C) {
 	testServer.Response(200, nil, DeleteDBInstanceExample)
 
@@ -133,6 +173,26 @@ func (s *S) Test_DeleteDBInstance(c *C) {
 	c.Assert(req.Form["Action"], DeepEquals, []string{"DeleteDBInstance"})
 	c.Assert(req.Form["DBInstanceIdentifier"], DeepEquals, []string{"foobarbaz"})
 	c.Assert(req.Form["SkipFinalSnapshot"], DeepEquals, []string{"true"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "7369556f-b70d-11c3-faca-6ba18376ea1b")
+}
+
+func (s *S) Test_DeleteDBInstance_SnapshotIdentifier(c *C) {
+	testServer.Response(200, nil, DeleteDBInstanceExample)
+
+	options := rds.DeleteDBInstance{
+		DBInstanceIdentifier:      "foobarbaz",
+		SkipFinalSnapshot:         false,
+		FinalDBSnapshotIdentifier: "bar",
+	}
+
+	resp, err := s.rds.DeleteDBInstance(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"DeleteDBInstance"})
+	c.Assert(req.Form["DBInstanceIdentifier"], DeepEquals, []string{"foobarbaz"})
+	c.Assert(req.Form["FinalDBSnapshotIdentifier"], DeepEquals, []string{"bar"})
+	c.Assert(req.Form["SkipFinalSnapshot"], IsNil)
 	c.Assert(err, IsNil)
 	c.Assert(resp.RequestId, Equals, "7369556f-b70d-11c3-faca-6ba18376ea1b")
 }
@@ -153,6 +213,22 @@ func (s *S) Test_DeleteDBSecurityGroup(c *C) {
 	c.Assert(resp.RequestId, Equals, "7aec7454-ba25-11d3-855b-576787000e19")
 }
 
+func (s *S) Test_DeleteDBSubnetGroup(c *C) {
+	testServer.Response(200, nil, DeleteDBSubnetGroupExample)
+
+	options := rds.DeleteDBSubnetGroup{
+		DBSubnetGroupName: "foobarbaz",
+	}
+
+	resp, err := s.rds.DeleteDBSubnetGroup(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"DeleteDBSubnetGroup"})
+	c.Assert(req.Form["DBSubnetGroupName"], DeepEquals, []string{"foobarbaz"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "6295e5ab-bbf3-11d3-f4c6-37db295f7674")
+}
+
 func (s *S) Test_AuthorizeDBSecurityGroupIngress(c *C) {
 	testServer.Response(200, nil, AuthorizeDBSecurityGroupIngressExample)
 
@@ -169,4 +245,45 @@ func (s *S) Test_AuthorizeDBSecurityGroupIngress(c *C) {
 	c.Assert(req.Form["EC2SecurityGroupOwnerId"], DeepEquals, []string{"bar"})
 	c.Assert(err, IsNil)
 	c.Assert(resp.RequestId, Equals, "6176b5f8-bfed-11d3-f92b-31fa5e8dbc99")
+}
+
+func (s *S) Test_DescribeDBSnapshots(c *C) {
+	testServer.Response(200, nil, DescribeDBSnapshotsExample)
+
+	options := rds.DescribeDBSnapshots{
+		DBInstanceIdentifier: "foobar",
+		DBSnapshotIdentifier: "baz",
+		SnapshotType:         "manual",
+	}
+
+	resp, err := s.rds.DescribeDBSnapshots(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"DescribeDBSnapshots"})
+	c.Assert(req.Form["DBInstanceIdentifier"], DeepEquals, []string{"foobar"})
+	c.Assert(req.Form["DBSnapshotIdentifier"], DeepEquals, []string{"baz"})
+	c.Assert(req.Form["SnapshotType"], DeepEquals, []string{"manual"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "b7769930-b98c-11d3-f272-7cd6cce12cc5")
+	c.Assert(resp.DBSnapshots[0].OptionGroupName, Equals, "default:mysql-5-6")
+	c.Assert(resp.DBSnapshots[0].Engine, Equals, "mysql")
+	c.Assert(resp.DBSnapshots[0].SnapshotType, Equals, "manual")
+}
+
+func (s *S) Test_RestoreDBInstanceFromDBSnapshot(c *C) {
+	testServer.Response(200, nil, RestoreDBInstanceFromDBSnapshotExample)
+
+	options := rds.RestoreDBInstanceFromDBSnapshot{
+		DBInstanceIdentifier: "foo",
+		DBSnapshotIdentifier: "bar",
+	}
+
+	resp, err := s.rds.RestoreDBInstanceFromDBSnapshot(&options)
+	req := testServer.WaitRequest()
+
+	c.Assert(req.Form["Action"], DeepEquals, []string{"RestoreDBInstanceFromDBSnapshot"})
+	c.Assert(req.Form["DBInstanceIdentifier"], DeepEquals, []string{"foo"})
+	c.Assert(req.Form["DBSnapshotIdentifier"], DeepEquals, []string{"bar"})
+	c.Assert(err, IsNil)
+	c.Assert(resp.RequestId, Equals, "863fd73e-be2b-11d3-855b-576787000e19")
 }

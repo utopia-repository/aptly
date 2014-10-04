@@ -93,26 +93,94 @@ func makeParams(action string) map[string]string {
 type Listener struct {
 	InstancePort     int64  `xml:"member>Listener>InstancePort"`
 	InstanceProtocol string `xml:"member>Listener>InstanceProtocol"`
+	SSLCertificateId string `xml:"member>Listener>SSLCertificateId"`
 	LoadBalancerPort int64  `xml:"member>Listener>LoadBalancerPort"`
 	Protocol         string `xml:"member>Listener>Protocol"`
 }
 
 // An Instance attaches to an elb
 type Instance struct {
-	InstanceId string `xml:"member>InstanceId"`
+	InstanceId string `xml:"InstanceId"`
+}
+
+// A tag attached to an elb
+type Tag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
 }
 
 // An InstanceState from an elb health query
 type InstanceState struct {
-	InstanceId  string `xml:"member>InstanceId"`
-	Description string `xml:"member>Description"`
-	State       string `xml:"member>State"`
-	ReasonCode  string `xml:"member>ReasonCode"`
+	InstanceId  string `xml:"InstanceId"`
+	Description string `xml:"Description"`
+	State       string `xml:"State"`
+	ReasonCode  string `xml:"ReasonCode"`
 }
 
 // An Instance attaches to an elb
 type AvailabilityZone struct {
 	AvailabilityZone string `xml:"member"`
+}
+
+// ----------------------------------------------------------------------------
+// AddTags
+
+type AddTags struct {
+	LoadBalancerNames []string
+	Tags              []Tag
+}
+
+type AddTagsResp struct {
+	RequestId string `xml:"ResponseMetadata>RequestId"`
+}
+
+func (elb *ELB) AddTags(options *AddTags) (resp *AddTagsResp, err error) {
+	params := makeParams("AddTags")
+
+	for i, v := range options.LoadBalancerNames {
+		params["LoadBalancerNames.member."+strconv.Itoa(i+1)] = v
+	}
+
+	for i, v := range options.Tags {
+		params["Tags.member."+strconv.Itoa(i+1)+".Key"] = v.Key
+		params["Tags.member."+strconv.Itoa(i+1)+".Value"] = v.Value
+	}
+
+	resp = &AddTagsResp{}
+
+	err = elb.query(params, resp)
+
+	return resp, err
+}
+
+// ----------------------------------------------------------------------------
+// RemoveTags
+
+type RemoveTags struct {
+	LoadBalancerNames []string
+	TagKeys           []string
+}
+
+type RemoveTagsResp struct {
+	RequestId string `xml:"ResponseMetadata>RequestId"`
+}
+
+func (elb *ELB) RemoveTags(options *RemoveTags) (resp *RemoveTagsResp, err error) {
+	params := makeParams("RemoveTags")
+
+	for i, v := range options.LoadBalancerNames {
+		params["LoadBalancerNames.member."+strconv.Itoa(i+1)] = v
+	}
+
+	for i, v := range options.TagKeys {
+		params["Tags.member."+strconv.Itoa(i+1)+".Key"] = v
+	}
+
+	resp = &RemoveTagsResp{}
+
+	err = elb.query(params, resp)
+
+	return resp, err
 }
 
 // ----------------------------------------------------------------------------
@@ -126,6 +194,7 @@ type CreateLoadBalancer struct {
 	Internal         bool // true for vpc elbs
 	SecurityGroups   []string
 	Subnets          []string
+	Tags             []Tag
 }
 
 type CreateLoadBalancerResp struct {
@@ -155,6 +224,12 @@ func (elb *ELB) CreateLoadBalancer(options *CreateLoadBalancer) (resp *CreateLoa
 		params["Listeners.member."+strconv.Itoa(i+1)+".InstancePort"] = strconv.FormatInt(v.InstancePort, 10)
 		params["Listeners.member."+strconv.Itoa(i+1)+".Protocol"] = v.Protocol
 		params["Listeners.member."+strconv.Itoa(i+1)+".InstanceProtocol"] = v.InstanceProtocol
+		params["Listeners.member."+strconv.Itoa(i+1)+".SSLCertificateId"] = v.SSLCertificateId
+	}
+
+	for i, v := range options.Tags {
+		params["Tags.member."+strconv.Itoa(i+1)+".Key"] = v.Key
+		params["Tags.member."+strconv.Itoa(i+1)+".Value"] = v.Value
 	}
 
 	if options.Internal {
@@ -203,10 +278,13 @@ func (elb *ELB) DeleteLoadBalancer(options *DeleteLoadBalancer) (resp *SimpleRes
 type LoadBalancer struct {
 	LoadBalancerName  string             `xml:"member>LoadBalancerName"`
 	Listeners         []Listener         `xml:"member>ListenerDescriptions"`
-	Instances         []Instance         `xml:"member>Instances"`
+	Instances         []Instance         `xml:"member>Instances>member"`
+	HealthCheck       HealthCheck        `xml:"member>HealthCheck"`
 	AvailabilityZones []AvailabilityZone `xml:"member>AvailabilityZones"`
-	Scheme            string             `xml:"member>Scheme"`
 	DNSName           string             `xml:"member>DNSName"`
+	SecurityGroups    []string           `xml:"member>SecurityGroups>member"`
+	Scheme            string             `xml:"member>Scheme"`
+	Subnets           []string           `xml:"member>Subnets>member"`
 }
 
 // DescribeLoadBalancer request params
@@ -303,6 +381,84 @@ func (elb *ELB) DeregisterInstancesFromLoadBalancer(options *DeregisterInstances
 }
 
 // ----------------------------------------------------------------------------
+// DescribeTags
+
+type DescribeTags struct {
+	LoadBalancerNames []string
+}
+
+type LoadBalancerTag struct {
+	Tags             []Tag  `xml:"Tags>member"`
+	LoadBalancerName string `xml:"LoadBalancerName"`
+}
+
+type DescribeTagsResp struct {
+	LoadBalancerTags []LoadBalancerTag `xml:"DescribeTagsResult>TagDescriptions>member"`
+	NextToken        string            `xml:"DescribeTagsResult>NextToken"`
+	RequestId        string            `xml:"ResponseMetadata>RequestId"`
+}
+
+func (elb *ELB) DescribeTags(options *DescribeTags) (resp *DescribeTagsResp, err error) {
+	params := makeParams("DescribeTags")
+
+	for i, v := range options.LoadBalancerNames {
+		params["LoadBalancerNames.member."+strconv.Itoa(i+1)] = v
+	}
+
+	resp = &DescribeTagsResp{}
+
+	err = elb.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+// ----------------------------------------------------------------------------
+// Health Checks
+
+type HealthCheck struct {
+	HealthyThreshold   int64  `xml:"HealthyThreshold"`
+	UnhealthyThreshold int64  `xml:"UnhealthyThreshold"`
+	Interval           int64  `xml:"Interval"`
+	Target             string `xml:"Target"`
+	Timeout            int64  `xml:"Timeout"`
+}
+
+type ConfigureHealthCheck struct {
+	LoadBalancerName string
+	Check            HealthCheck
+}
+
+type ConfigureHealthCheckResp struct {
+	Check     HealthCheck `xml:"ConfigureHealthCheckResult>HealthCheck"`
+	RequestId string      `xml:"ResponseMetadata>RequestId"`
+}
+
+func (elb *ELB) ConfigureHealthCheck(options *ConfigureHealthCheck) (resp *ConfigureHealthCheckResp, err error) {
+	params := makeParams("ConfigureHealthCheck")
+
+	params["LoadBalancerName"] = options.LoadBalancerName
+	params["HealthCheck.HealthyThreshold"] = strconv.Itoa(int(options.Check.HealthyThreshold))
+	params["HealthCheck.UnhealthyThreshold"] = strconv.Itoa(int(options.Check.UnhealthyThreshold))
+	params["HealthCheck.Interval"] = strconv.Itoa(int(options.Check.Interval))
+	params["HealthCheck.Target"] = options.Check.Target
+	params["HealthCheck.Timeout"] = strconv.Itoa(int(options.Check.Timeout))
+
+	resp = &ConfigureHealthCheckResp{}
+
+	err = elb.query(params, resp)
+
+	if err != nil {
+		resp = nil
+	}
+
+	return
+}
+
+// ----------------------------------------------------------------------------
 // Instance Health
 
 // The DescribeInstanceHealth request parameters
@@ -311,7 +467,7 @@ type DescribeInstanceHealth struct {
 }
 
 type DescribeInstanceHealthResp struct {
-	InstanceStates []InstanceState `xml:"DescribeInstanceHealthResult>InstanceStates"`
+	InstanceStates []InstanceState `xml:"DescribeInstanceHealthResult>InstanceStates>member"`
 	RequestId      string          `xml:"ResponseMetadata>RequestId"`
 }
 

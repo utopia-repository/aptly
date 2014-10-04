@@ -124,13 +124,15 @@ func (h *dbHarness) openAssert(want bool) {
 	}
 }
 
-func (h *dbHarness) put(key, value string) {
-	t := h.t
-	db := h.db
+func (h *dbHarness) write(batch *Batch) {
+	if err := h.db.Write(batch, h.wo); err != nil {
+		h.t.Error("Write: got error: ", err)
+	}
+}
 
-	err := db.Put([]byte(key), []byte(value), h.wo)
-	if err != nil {
-		t.Error("Put: got error: ", err)
+func (h *dbHarness) put(key, value string) {
+	if err := h.db.Put([]byte(key), []byte(value), h.wo); err != nil {
+		h.t.Error("Put: got error: ", err)
 	}
 }
 
@@ -147,15 +149,12 @@ func (h *dbHarness) maxNextLevelOverlappingBytes(want uint64) {
 	db := h.db
 
 	var res uint64
-	ucmp := db.s.cmp.cmp
 	v := db.s.version()
 	for i, tt := range v.tables[1 : len(v.tables)-1] {
 		level := i + 1
 		next := v.tables[level+1]
 		for _, t := range tt {
-			var r tFiles
-			min, max := t.min.ukey(), t.max.ukey()
-			next.getOverlaps(min, max, &r, true, ucmp)
+			r := next.getOverlaps(nil, db.s.icmp, t.imin.ukey(), t.imax.ukey(), false)
 			sum := r.size()
 			if sum > res {
 				res = sum
@@ -176,6 +175,21 @@ func (h *dbHarness) delete(key string) {
 	err := db.Delete([]byte(key), h.wo)
 	if err != nil {
 		t.Error("Delete: got error: ", err)
+	}
+}
+
+func (h *dbHarness) assertNumKeys(want int) {
+	iter := h.db.NewIterator(nil, h.ro)
+	defer iter.Release()
+	got := 0
+	for iter.Next() {
+		got++
+	}
+	if err := iter.Error(); err != nil {
+		h.t.Error("assertNumKeys: ", err)
+	}
+	if want != got {
+		h.t.Errorf("assertNumKeys: want=%d got=%d", want, got)
 	}
 }
 
@@ -221,7 +235,7 @@ func (h *dbHarness) getVal(key, value string) {
 func (h *dbHarness) allEntriesFor(key, want string) {
 	t := h.t
 	db := h.db
-	ucmp := db.s.cmp.cmp
+	s := db.s
 
 	ikey := newIKey([]byte(key), kMaxSeq, tVal)
 	iter := db.newRawIterator(nil, nil)
@@ -234,7 +248,7 @@ func (h *dbHarness) allEntriesFor(key, want string) {
 	for iter.Valid() {
 		rkey := iKey(iter.Key())
 		if _, t, ok := rkey.parseNum(); ok {
-			if ucmp.Compare(ikey.ukey(), rkey.ukey()) != 0 {
+			if s.icmp.uCompare(ikey.ukey(), rkey.ukey()) != 0 {
 				break
 			}
 			if !first {
@@ -291,7 +305,16 @@ func (h *dbHarness) getKeyVal(want string) {
 func (h *dbHarness) waitCompaction() {
 	t := h.t
 	db := h.db
-	if err := db.wakeCompaction(2); err != nil {
+	if err := db.compSendIdle(db.tcompCmdC); err != nil {
+		t.Error("compaction error: ", err)
+	}
+}
+
+func (h *dbHarness) waitMemCompaction() {
+	t := h.t
+	db := h.db
+
+	if err := db.compSendIdle(db.mcompCmdC); err != nil {
 		t.Error("compaction error: ", err)
 	}
 }
@@ -300,41 +323,15 @@ func (h *dbHarness) compactMem() {
 	t := h.t
 	db := h.db
 
-	if err := db.wakeCompaction(1); err != nil {
+	db.writeLockC <- struct{}{}
+	defer func() {
+		<-db.writeLockC
+	}()
+
+	if _, err := db.rotateMem(0); err != nil {
 		t.Error("compaction error: ", err)
-		return
 	}
-
-	if mem := db.getEffectiveMem(); mem.Len() == 0 {
-		return
-	}
-
-	select {
-	case <-db.compMemAckCh:
-	case err := <-db.compErrCh:
-		t.Error("compaction error: ", err)
-		return
-	}
-
-	// create new memdb and journal
-	_, err := db.newMem(0)
-	if err != nil {
-		t.Error("newMem: got error: ", err)
-		return
-	}
-
-	cch := make(chan struct{})
-	// Schedule mem compaction.
-	select {
-	case db.compMemCh <- (chan<- struct{})(cch):
-	case err := <-db.compErrCh:
-		t.Error("compaction error: ", err)
-		return
-	}
-	// Wait.
-	select {
-	case <-cch:
-	case err := <-db.compErrCh:
+	if err := db.compSendIdle(db.mcompCmdC); err != nil {
 		t.Error("compaction error: ", err)
 	}
 
@@ -347,35 +344,22 @@ func (h *dbHarness) compactRangeAtErr(level int, min, max string, wanterr bool) 
 	t := h.t
 	db := h.db
 
-	cch := make(chan struct{})
-	req := &cReq{level: level, cch: cch}
+	var _min, _max []byte
 	if min != "" {
-		req.min = []byte(min)
+		_min = []byte(min)
 	}
 	if max != "" {
-		req.max = []byte(max)
+		_max = []byte(max)
 	}
 
-	// Push manual compaction request.
-	select {
-	case err := <-db.compErrCh:
-		t.Error("CompactRangeAt: compaction error: ", err)
-		return
-	case db.compReqCh <- req:
-	}
-
-	// Wait for compaction
-	select {
-	case err := <-db.compErrCh:
+	if err := db.compSendRange(db.tcompCmdC, level, _min, _max); err != nil {
 		if wanterr {
 			t.Log("CompactRangeAt: got error (expected): ", err)
 		} else {
 			t.Error("CompactRangeAt: got error: ", err)
 		}
-	case <-cch:
-		if wanterr {
-			t.Error("CompactRangeAt: expect error")
-		}
+	} else if wanterr {
+		t.Error("CompactRangeAt: expect error")
 	}
 }
 
@@ -394,8 +378,7 @@ func (h *dbHarness) compactRange(min, max string) {
 	if max != "" {
 		r.Limit = []byte(max)
 	}
-	err := db.CompactRange(r)
-	if err != nil {
+	if err := db.CompactRange(r); err != nil {
 		t.Error("CompactRange: got error: ", err)
 	}
 }
@@ -404,11 +387,11 @@ func (h *dbHarness) sizeAssert(start, limit string, low, hi uint64) {
 	t := h.t
 	db := h.db
 
-	s, err := db.GetApproximateSizes([]util.Range{
+	s, err := db.SizeOf([]util.Range{
 		{[]byte(start), []byte(limit)},
 	})
 	if err != nil {
-		t.Error("GetApproximateSizes: got error: ", err)
+		t.Error("SizeOf: got error: ", err)
 	}
 	if s.Sum() < low || s.Sum() > hi {
 		t.Errorf("sizeof %q to %q not in range, want %d - %d, got %d",
@@ -1008,6 +991,7 @@ func TestDb_SparseMerge(t *testing.T) {
 	h.put("C", "vc")
 	h.compactMem()
 	h.compactRangeAt(0, "", "")
+	h.waitCompaction()
 
 	// Make sparse update
 	h.put("A", "va2")
@@ -1017,12 +1001,14 @@ func TestDb_SparseMerge(t *testing.T) {
 
 	h.maxNextLevelOverlappingBytes(20 * 1048576)
 	h.compactRangeAt(0, "", "")
+	h.waitCompaction()
 	h.maxNextLevelOverlappingBytes(20 * 1048576)
 	h.compactRangeAt(1, "", "")
+	h.waitCompaction()
 	h.maxNextLevelOverlappingBytes(20 * 1048576)
 }
 
-func TestDb_ApproximateSizes(t *testing.T) {
+func TestDb_SizeOf(t *testing.T) {
 	h := newDbHarnessWopt(t, &opt.Options{
 		Compression: opt.NoCompression,
 		WriteBuffer: 10000000,
@@ -1042,7 +1028,7 @@ func TestDb_ApproximateSizes(t *testing.T) {
 		h.put(numKey(i), strings.Repeat(fmt.Sprintf("v%09d", i), s1/10))
 	}
 
-	// 0 because GetApproximateSizes() does not account for memtable space
+	// 0 because SizeOf() does not account for memtable space
 	h.sizeAssert("", numKey(50), 0, 0)
 
 	for r := 0; r < 3; r++ {
@@ -1072,7 +1058,7 @@ func TestDb_ApproximateSizes(t *testing.T) {
 	}
 }
 
-func TestDb_ApproximateSizes_MixOfSmallAndLarge(t *testing.T) {
+func TestDb_SizeOf_MixOfSmallAndLarge(t *testing.T) {
 	h := newDbHarnessWopt(t, &opt.Options{Compression: opt.NoCompression})
 	defer h.close()
 
@@ -1224,7 +1210,7 @@ func TestDb_DeletionMarkers2(t *testing.T) {
 }
 
 func TestDb_CompactionTableOpenError(t *testing.T) {
-	h := newDbHarnessWopt(t, &opt.Options{MaxOpenFiles: 0})
+	h := newDbHarnessWopt(t, &opt.Options{CachedOpenFiles: -1})
 	defer h.close()
 
 	im := 10
@@ -1244,7 +1230,7 @@ func TestDb_CompactionTableOpenError(t *testing.T) {
 
 	h.stor.SetOpenErr(storage.TypeTable)
 	go h.db.CompactRange(util.Range{})
-	if err := h.db.wakeCompaction(2); err != nil {
+	if err := h.db.compSendIdle(h.db.tcompCmdC); err != nil {
 		t.Log("compaction error: ", err)
 	}
 	h.closeDB0()
@@ -1486,7 +1472,7 @@ func TestDb_ClosedIsClosed(t *testing.T) {
 	_, err = db.GetProperty("leveldb.stats")
 	assertErr(t, err, true)
 
-	_, err = db.GetApproximateSizes([]util.Range{{[]byte("a"), []byte("z")}})
+	_, err = db.SizeOf([]util.Range{{[]byte("a"), []byte("z")}})
 	assertErr(t, err, true)
 
 	assertErr(t, db.CompactRange(util.Range{}), true)
@@ -1591,7 +1577,7 @@ func TestDb_BloomFilter(t *testing.T) {
 		return fmt.Sprintf("key%06d", i)
 	}
 
-	n := 10000
+	const n = 10000
 
 	// Populate multiple layers
 	for i := 0; i < n; i++ {
@@ -1827,4 +1813,74 @@ func TestDb_DeletionMarkersOnMemdb(t *testing.T) {
 	h.delete("foo")
 	h.get("foo", false)
 	h.getKeyVal("")
+}
+
+func TestDb_LeveldbIssue178(t *testing.T) {
+	nKeys := (kMaxTableSize / 30) * 5
+	key1 := func(i int) string {
+		return fmt.Sprintf("my_key_%d", i)
+	}
+	key2 := func(i int) string {
+		return fmt.Sprintf("my_key_%d_xxx", i)
+	}
+
+	// Disable compression since it affects the creation of layers and the
+	// code below is trying to test against a very specific scenario.
+	h := newDbHarnessWopt(t, &opt.Options{Compression: opt.NoCompression})
+	defer h.close()
+
+	// Create first key range.
+	batch := new(Batch)
+	for i := 0; i < nKeys; i++ {
+		batch.Put([]byte(key1(i)), []byte("value for range 1 key"))
+	}
+	h.write(batch)
+
+	// Create second key range.
+	batch.Reset()
+	for i := 0; i < nKeys; i++ {
+		batch.Put([]byte(key2(i)), []byte("value for range 2 key"))
+	}
+	h.write(batch)
+
+	// Delete second key range.
+	batch.Reset()
+	for i := 0; i < nKeys; i++ {
+		batch.Delete([]byte(key2(i)))
+	}
+	h.write(batch)
+	h.waitMemCompaction()
+
+	// Run manual compaction.
+	h.compactRange(key1(0), key1(nKeys-1))
+
+	// Checking the keys.
+	h.assertNumKeys(nKeys)
+}
+
+func TestDb_LeveldbIssue200(t *testing.T) {
+	h := newDbHarness(t)
+	defer h.close()
+
+	h.put("1", "b")
+	h.put("2", "c")
+	h.put("3", "d")
+	h.put("4", "e")
+	h.put("5", "f")
+
+	iter := h.db.NewIterator(nil, h.ro)
+
+	// Add an element that should not be reflected in the iterator.
+	h.put("25", "cd")
+
+	iter.Seek([]byte("5"))
+	assertBytes(t, []byte("5"), iter.Key())
+	iter.Prev()
+	assertBytes(t, []byte("4"), iter.Key())
+	iter.Prev()
+	assertBytes(t, []byte("3"), iter.Key())
+	iter.Next()
+	assertBytes(t, []byte("4"), iter.Key())
+	iter.Next()
+	assertBytes(t, []byte("5"), iter.Key())
 }

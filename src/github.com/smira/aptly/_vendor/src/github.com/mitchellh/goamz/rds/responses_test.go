@@ -327,3 +327,224 @@ var AuthorizeDBSecurityGroupIngressExample = `
   </ResponseMetadata>
 </AuthorizeDBSecurityGroupIngressResponse>
 `
+
+var DescribeDBSubnetGroupsExample = `
+<DescribeDBSubnetGroupsResponse xmlns="http://rds.amazonaws.com/doc/2013-09-09/">
+  <DescribeDBSubnetGroupsResult>
+    <DBSubnetGroups>
+      <DBSubnetGroup>
+        <VpcId>vpc-e7abbdce</VpcId>
+        <SubnetGroupStatus>Complete</SubnetGroupStatus>
+        <DBSubnetGroupDescription>DB subnet group 1</DBSubnetGroupDescription>
+        <DBSubnetGroupName>mydbsubnetgroup1</DBSubnetGroupName>
+        <Subnets>
+          <Subnet>
+            <SubnetStatus>Active</SubnetStatus>
+            <SubnetIdentifier>subnet-e8b3e5b1</SubnetIdentifier>
+            <SubnetAvailabilityZone>
+              <Name>us-west-2a</Name>
+              <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+            </SubnetAvailabilityZone>
+          </Subnet>
+          <Subnet>
+            <SubnetStatus>Active</SubnetStatus>
+            <SubnetIdentifier>subnet-44b2f22e</SubnetIdentifier>
+            <SubnetAvailabilityZone>
+              <Name>us-west-2b</Name>
+              <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+            </SubnetAvailabilityZone>
+          </Subnet>
+        </Subnets>
+      </DBSubnetGroup>
+      <DBSubnetGroup>
+        <VpcId>vpc-c1e17bb8</VpcId>
+        <SubnetGroupStatus>Complete</SubnetGroupStatus>
+        <DBSubnetGroupDescription>My DB Subnet Group 2</DBSubnetGroupDescription>
+        <DBSubnetGroupName>sub-grp-2</DBSubnetGroupName>
+        <Subnets>
+          <Subnet>
+            <SubnetStatus>Active</SubnetStatus>
+            <SubnetIdentifier>subnet-d281ef8a</SubnetIdentifier>
+            <SubnetAvailabilityZone>
+              <Name>us-west-2a</Name>
+              <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+            </SubnetAvailabilityZone>
+          </Subnet>
+          <Subnet>
+            <SubnetStatus>Active</SubnetStatus>
+            <SubnetIdentifier>subnet-b381ef9f</SubnetIdentifier>
+            <SubnetAvailabilityZone>
+              <Name>us-west-2c</Name>
+              <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+            </SubnetAvailabilityZone>
+          </Subnet>
+          <Subnet>
+            <SubnetStatus>Active</SubnetStatus>
+            <SubnetIdentifier>subnet-e1e17ebd</SubnetIdentifier>
+            <SubnetAvailabilityZone>
+              <Name>us-west-2b</Name>
+              <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+            </SubnetAvailabilityZone>
+          </Subnet>
+        </Subnets>
+      </DBSubnetGroup>
+    </DBSubnetGroups>
+  </DescribeDBSubnetGroupsResult>
+  <ResponseMetadata>
+    <RequestId>b783db3b-b98c-11d3-fbc7-5c0aad74da7c</RequestId>
+  </ResponseMetadata>
+</DescribeDBSubnetGroupsResponse>
+`
+
+var DeleteDBSubnetGroupExample = `
+<DeleteDBSubnetGroupResponse xmlns="http://rds.amazonaws.com/doc/2013-09-09/">
+  <ResponseMetadata>
+    <RequestId>6295e5ab-bbf3-11d3-f4c6-37db295f7674</RequestId>
+  </ResponseMetadata>
+</DeleteDBSubnetGroupResponse>
+`
+
+var CreateDBSubnetGroupExample = `
+<CreateDBSubnetGroupResponse xmlns="http://rds.amazonaws.com/doc/2013-09-09/">
+  <CreateDBSubnetGroupResult>
+    <DBSubnetGroup>
+      <VpcId>vpc-33dc97ea</VpcId>
+      <SubnetGroupStatus>Complete</SubnetGroupStatus>
+      <DBSubnetGroupDescription>My new DB Subnet Group</DBSubnetGroupDescription>
+      <DBSubnetGroupName>myawsuser-dbsubnetgroup</DBSubnetGroupName>
+      <Subnets>
+        <Subnet>
+          <SubnetStatus>Active</SubnetStatus>
+          <SubnetIdentifier>subnet-e4d398a1</SubnetIdentifier>
+          <SubnetAvailabilityZone>
+            <Name>us-east-1b</Name>
+            <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+          </SubnetAvailabilityZone>
+        </Subnet>
+        <Subnet>
+          <SubnetStatus>Active</SubnetStatus>
+          <SubnetIdentifier>subnet-c2bdb6ba</SubnetIdentifier>
+          <SubnetAvailabilityZone>
+            <Name>us-east-1c</Name>
+            <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
+          </SubnetAvailabilityZone>
+        </Subnet>
+      </Subnets>
+    </DBSubnetGroup>
+  </CreateDBSubnetGroupResult>
+  <ResponseMetadata>
+    <RequestId>3a401b3f-bb9e-11d3-f4c6-37db295f7674</RequestId>
+  </ResponseMetadata>
+</CreateDBSubnetGroupResponse>
+`
+
+var DescribeDBSnapshotsExample = `
+<DescribeDBSnapshotsResponse xmlns="http://rds.amazonaws.com/doc/2013-09-09/">
+  <DescribeDBSnapshotsResult>
+    <DBSnapshots>
+      <DBSnapshot>
+        <Port>3306</Port>
+        <OptionGroupName>default:mysql-5-6</OptionGroupName>
+        <Engine>mysql</Engine>
+        <Status>available</Status>
+        <SnapshotType>manual</SnapshotType>
+        <LicenseModel>general-public-license</LicenseModel>
+        <EngineVersion>5.6.13</EngineVersion>
+        <DBInstanceIdentifier>my-mysqlexampledb</DBInstanceIdentifier>
+        <DBSnapshotIdentifier>my-test-restore-snapshot</DBSnapshotIdentifier>
+        <SnapshotCreateTime>2014-03-28T19:57:16.707Z</SnapshotCreateTime>
+        <AvailabilityZone>us-west-2b</AvailabilityZone>
+        <InstanceCreateTime>2014-01-29T22:58:24.231Z</InstanceCreateTime>
+        <PercentProgress>100</PercentProgress>
+        <AllocatedStorage>5</AllocatedStorage>
+        <MasterUsername>awsmyuser</MasterUsername>
+      </DBSnapshot>
+      <DBSnapshot>
+        <Port>3306</Port>
+        <OptionGroupName>default:mysql-5-6</OptionGroupName>
+        <Engine>mysql</Engine>
+        <Status>available</Status>
+        <SnapshotType>automated</SnapshotType>
+        <LicenseModel>general-public-license</LicenseModel>
+        <EngineVersion>5.6.13</EngineVersion>
+        <DBInstanceIdentifier>my-mysqlexampledb</DBInstanceIdentifier>
+        <DBSnapshotIdentifier>rds:my-mysqlexampledb-2014-04-19-10-08</DBSnapshotIdentifier>
+        <SnapshotCreateTime>2014-04-19T10:09:09.790Z</SnapshotCreateTime>
+        <AvailabilityZone>us-west-2b</AvailabilityZone>
+        <InstanceCreateTime>2014-01-29T22:58:24.231Z</InstanceCreateTime>
+        <PercentProgress>100</PercentProgress>
+        <AllocatedStorage>5</AllocatedStorage>
+        <MasterUsername>awsmyuser</MasterUsername>
+      </DBSnapshot>
+      <DBSnapshot>
+        <Port>3306</Port>
+        <OptionGroupName>default:mysql-5-6</OptionGroupName>
+        <Engine>mysql</Engine>
+        <Status>available</Status>
+        <SnapshotType>automated</SnapshotType>
+        <LicenseModel>general-public-license</LicenseModel>
+        <EngineVersion>5.6.13</EngineVersion>
+        <DBInstanceIdentifier>my-mysqlexampledb</DBInstanceIdentifier>
+        <DBSnapshotIdentifier>rds:my-mysqlexampledb-2014-04-20-10-09</DBSnapshotIdentifier>
+        <SnapshotCreateTime>2014-04-20T10:09:15.446Z</SnapshotCreateTime>
+        <AvailabilityZone>us-west-2b</AvailabilityZone>
+        <InstanceCreateTime>2014-01-29T22:58:24.231Z</InstanceCreateTime>
+        <PercentProgress>100</PercentProgress>
+        <AllocatedStorage>5</AllocatedStorage>
+        <MasterUsername>awsmyuser</MasterUsername>
+      </DBSnapshot>
+    </DBSnapshots>
+  </DescribeDBSnapshotsResult>
+  <ResponseMetadata>
+    <RequestId>b7769930-b98c-11d3-f272-7cd6cce12cc5</RequestId>
+  </ResponseMetadata>
+</DescribeDBSnapshotsResponse>
+`
+
+var RestoreDBInstanceFromDBSnapshotExample = `
+<RestoreDBInstanceFromDBSnapshotResponse xmlns="http://rds.amazonaws.com/doc/2013-09-09/">
+  <RestoreDBInstanceFromDBSnapshotResult>
+    <DBInstance>
+      <BackupRetentionPeriod>2</BackupRetentionPeriod>
+      <MultiAZ>false</MultiAZ>
+      <DBInstanceStatus>creating</DBInstanceStatus>
+      <VpcSecurityGroups/>
+      <DBInstanceIdentifier>mysqldb-restored</DBInstanceIdentifier>
+      <PreferredBackupWindow>08:14-08:44</PreferredBackupWindow>
+      <PreferredMaintenanceWindow>fri:04:50-fri:05:20</PreferredMaintenanceWindow>
+      <ReadReplicaDBInstanceIdentifiers/>
+      <Engine>mysql</Engine>
+      <PendingModifiedValues/>
+      <LicenseModel>general-public-license</LicenseModel>
+      <EngineVersion>5.6.13</EngineVersion>
+      <DBParameterGroups>
+        <DBParameterGroup>
+          <ParameterApplyStatus>in-sync</ParameterApplyStatus>
+          <DBParameterGroupName>default.mysql5.6</DBParameterGroupName>
+        </DBParameterGroup>
+      </DBParameterGroups>
+      <OptionGroupMemberships>
+        <OptionGroupMembership>
+          <OptionGroupName>default:mysql-5-6</OptionGroupName>
+          <Status>pending-apply</Status>
+        </OptionGroupMembership>
+      </OptionGroupMemberships>
+      <PubliclyAccessible>true</PubliclyAccessible>
+      <DBSecurityGroups>
+        <DBSecurityGroup>
+          <Status>active</Status>
+          <DBSecurityGroupName>default</DBSecurityGroupName>
+        </DBSecurityGroup>
+      </DBSecurityGroups>
+      <DBName>mysqldb</DBName>
+      <AutoMinorVersionUpgrade>true</AutoMinorVersionUpgrade>
+      <AllocatedStorage>100</AllocatedStorage>
+      <MasterUsername>myawsuser</MasterUsername>
+      <DBInstanceClass>db.m1.medium</DBInstanceClass>
+    </DBInstance>
+  </RestoreDBInstanceFromDBSnapshotResult>
+  <ResponseMetadata>
+    <RequestId>863fd73e-be2b-11d3-855b-576787000e19</RequestId>
+  </ResponseMetadata>
+</RestoreDBInstanceFromDBSnapshotResponse>
+`

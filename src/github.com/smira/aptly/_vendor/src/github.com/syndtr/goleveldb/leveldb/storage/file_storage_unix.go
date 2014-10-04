@@ -4,7 +4,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// +build darwin freebsd linux netbsd openbsd
+// +build darwin dragonfly freebsd linux netbsd openbsd
 
 package storage
 
@@ -48,4 +48,16 @@ func setFileLock(f *os.File, lock bool) error {
 
 func rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
+}
+
+func syncDir(name string) error {
+	f, err := os.Open(name)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	return nil
 }

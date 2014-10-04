@@ -140,3 +140,35 @@ class UpdateMirror10Test(BaseTest):
 
     def output_processor(self, output):
         return "\n".join(sorted(output.split("\n")))
+
+
+class UpdateMirror11Test(BaseTest):
+    """
+    update mirrors: update over FTP
+    """
+    longTest = False
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly mirror create -keyring=aptlytest.gpg -filter='Priority (required), Name (% s*)' -architectures=i386 wheezy-main ftp://ftp.ru.debian.org/debian/ wheezy main",
+    ]
+    outputMatchPrepare = lambda _, s: re.sub(r'Signature made .* using', '', s)
+    runCmd = "aptly mirror update -keyring=aptlytest.gpg wheezy-main"
+
+    def output_processor(self, output):
+        return "\n".join(sorted(output.split("\n")))
+
+
+class UpdateMirror12Test(BaseTest):
+    """
+    update mirrors: update with udebs
+    """
+    longTest = False
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly -architectures=i386,amd64 mirror create -keyring=aptlytest.gpg -filter='$$Source (dmraid)' -with-udebs squeeze http://mirror.yandex.ru/debian/ squeeze main non-free",
+    ]
+    runCmd = "aptly mirror update -keyring=aptlytest.gpg squeeze"
+    outputMatchPrepare = lambda _, s: re.sub(r'Signature made .* using', '', s)
+
+    def output_processor(self, output):
+        return "\n".join(sorted(output.split("\n")))

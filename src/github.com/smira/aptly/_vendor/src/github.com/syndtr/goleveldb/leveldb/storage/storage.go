@@ -9,6 +9,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -36,7 +37,7 @@ func (t FileType) String() string {
 	case TypeTemp:
 		return "temp"
 	}
-	return "<unknown>"
+	return fmt.Sprintf("<unknown:%d>", t)
 }
 
 var (
@@ -66,7 +67,7 @@ type Writer interface {
 	Syncer
 }
 
-// File is the file.
+// File is the file. A file instance must be goroutine-safe.
 type File interface {
 	// Open opens the file for read. Returns os.ErrNotExist error
 	// if the file does not exist.
@@ -93,7 +94,7 @@ type File interface {
 	Remove() error
 }
 
-// Storage is the storage.
+// Storage is the storage. A storage instance must be goroutine-safe.
 type Storage interface {
 	// Lock locks the storage. Any subsequent attempt to call Lock will fail
 	// until the last lock released.

@@ -329,6 +329,17 @@ func Lookup(name string) *Flag {
 	return commandLine.formal[name]
 }
 
+// IsSet checks whether flag has been actually set
+func (f *FlagSet) IsSet(name string) bool {
+	_, exists := f.actual[name]
+	return exists
+}
+
+// IsSet checks whether flag has been actually set on the command-lien
+func IsSet(name string) bool {
+	return commandLine.IsSet(name)
+}
+
 // Set sets the value of the named flag.
 func (f *FlagSet) Set(name, value string) error {
 	flag, ok := f.formal[name]

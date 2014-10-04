@@ -18,6 +18,8 @@ func makeCmdSnapshot() *commander.Command {
 			makeCmdSnapshotMerge(),
 			makeCmdSnapshotDrop(),
 			makeCmdSnapshotRename(),
+			makeCmdSnapshotSearch(),
+			makeCmdSnapshotFilter(),
 		},
 	}
 }

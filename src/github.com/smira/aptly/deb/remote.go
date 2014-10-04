@@ -16,7 +16,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+)
+
+// RemoteRepo statuses
+const (
+	MirrorIdle = iota
+	MirrorUpdating
 )
 
 // RemoteRepo represents remote (fetchable) Debian repository.
@@ -37,6 +44,8 @@ type RemoteRepo struct {
 	Architectures []string
 	// Should we download sources?
 	DownloadSources bool
+	// Should we download .udebs?
+	DownloadUdebs bool
 	// Meta-information about repository
 	Meta Stanza
 	// Last update date
@@ -47,15 +56,23 @@ type RemoteRepo struct {
 	Filter string
 	// FilterWithDeps to include dependencies from filter query
 	FilterWithDeps bool
+	// Status marks state of repository (being updated, no action)
+	Status int
+	// WorkerPID is PID of the process modifying the mirror (if any)
+	WorkerPID int
 	// "Snapshot" of current list of packages
 	packageRefs *PackageRefList
+	// Temporary list of package refs
+	tempPackageRefs *PackageRefList
 	// Parsed archived root
 	archiveRootURL *url.URL
+	// Current list of packages (filled while updating mirror)
+	packageList *PackageList
 }
 
 // NewRemoteRepo creates new instance of Debian remote repository with specified params
 func NewRemoteRepo(name string, archiveRoot string, distribution string, components []string,
-	architectures []string, downloadSources bool) (*RemoteRepo, error) {
+	architectures []string, downloadSources bool, downloadUdebs bool) (*RemoteRepo, error) {
 	result := &RemoteRepo{
 		UUID:            uuid.New(),
 		Name:            name,
@@ -64,6 +81,7 @@ func NewRemoteRepo(name string, archiveRoot string, distribution string, compone
 		Components:      components,
 		Architectures:   architectures,
 		DownloadSources: downloadSources,
+		DownloadUdebs:   downloadUdebs,
 	}
 
 	err := result.prepare()
@@ -79,6 +97,9 @@ func NewRemoteRepo(name string, archiveRoot string, distribution string, compone
 		result.Architectures = nil
 		if len(result.Components) > 0 {
 			return nil, fmt.Errorf("components aren't supported for flat repos")
+		}
+		if result.DownloadUdebs {
+			return nil, fmt.Errorf("debian-installer udebs aren't supported for flat repos")
 		}
 		result.Components = nil
 	}
@@ -102,7 +123,10 @@ func (repo *RemoteRepo) prepare() error {
 func (repo *RemoteRepo) String() string {
 	srcFlag := ""
 	if repo.DownloadSources {
-		srcFlag = " [src]"
+		srcFlag += " [src]"
+	}
+	if repo.DownloadUdebs {
+		srcFlag += " [udeb]"
 	}
 	distribution := repo.Distribution
 	if distribution == "" {
@@ -129,6 +153,37 @@ func (repo *RemoteRepo) NumPackages() int {
 // RefList returns package list for repo
 func (repo *RemoteRepo) RefList() *PackageRefList {
 	return repo.packageRefs
+}
+
+// MarkAsUpdating puts current PID and sets status to updating
+func (repo *RemoteRepo) MarkAsUpdating() {
+	repo.Status = MirrorUpdating
+	repo.WorkerPID = os.Getpid()
+}
+
+// MarkAsIdle clears updating flag
+func (repo *RemoteRepo) MarkAsIdle() {
+	repo.Status = MirrorIdle
+	repo.WorkerPID = 0
+}
+
+// CheckLock returns error if mirror is being updated by another process
+func (repo *RemoteRepo) CheckLock() error {
+	if repo.Status == MirrorIdle || repo.WorkerPID == 0 {
+		return nil
+	}
+
+	p, err := os.FindProcess(repo.WorkerPID)
+	if err != nil {
+		return nil
+	}
+
+	err = p.Signal(syscall.Signal(0))
+	if err == nil {
+		return fmt.Errorf("mirror is locked by update operation, PID %d", repo.WorkerPID)
+	}
+
+	return nil
 }
 
 // ReleaseURL returns URL to Release* files in repo root
@@ -166,6 +221,13 @@ func (repo *RemoteRepo) BinaryURL(component string, architecture string) *url.UR
 // SourcesURL returns URL of Sources files for given component
 func (repo *RemoteRepo) SourcesURL(component string) *url.URL {
 	path := &url.URL{Path: fmt.Sprintf("dists/%s/%s/source/Sources", repo.Distribution, component)}
+	return repo.archiveRootURL.ResolveReference(path)
+}
+
+// UdebURL returns URL of Packages files for given component and
+// architecture
+func (repo *RemoteRepo) UdebURL(component string, architecture string) *url.URL {
+	path := &url.URL{Path: fmt.Sprintf("dists/%s/%s/debian-installer/binary-%s/Packages", repo.Distribution, component, architecture)}
 	return repo.archiveRootURL.ResolveReference(path)
 }
 
@@ -323,12 +385,13 @@ ok:
 	return nil
 }
 
-// Download downloads all repo files
-func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, collectionFactory *CollectionFactory,
-	packagePool aptly.PackagePool, ignoreMismatch bool, dependencyOptions int, filterQuery PackageQuery) error {
-	list := NewPackageList()
-
-	progress.Printf("Downloading & parsing package files...\n")
+// DownloadPackageIndexes downloads & parses package index files
+func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.Downloader, collectionFactory *CollectionFactory,
+	ignoreMismatch bool) error {
+	if repo.packageList != nil {
+		panic("packageList != nil")
+	}
+	repo.packageList = NewPackageList()
 
 	// Download and parse all Packages & Source files
 	packagesURLs := [][]string{}
@@ -342,6 +405,9 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 		for _, component := range repo.Components {
 			for _, architecture := range repo.Architectures {
 				packagesURLs = append(packagesURLs, []string{repo.BinaryURL(component, architecture).String(), "binary"})
+				if repo.DownloadUdebs {
+					packagesURLs = append(packagesURLs, []string{repo.UdebURL(component, architecture).String(), "udeb"})
+				}
 			}
 			if repo.DownloadSources {
 				packagesURLs = append(packagesURLs, []string{repo.SourcesURL(component).String(), "source"})
@@ -378,13 +444,15 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 
 			if kind == "binary" {
 				p = NewPackageFromControlFile(stanza)
+			} else if kind == "udeb" {
+				p = NewUdebPackageFromControlFile(stanza)
 			} else if kind == "source" {
 				p, err = NewSourcePackageFromControlFile(stanza)
 				if err != nil {
 					return err
 				}
 			}
-			err = list.Add(p)
+			err = repo.packageList.Add(p)
 			if err != nil {
 				return err
 			}
@@ -398,33 +466,30 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 		progress.ShutdownBar()
 	}
 
-	var err error
+	return nil
+}
 
-	if repo.Filter != "" {
-		progress.Printf("Applying filter...\n")
+// ApplyFilter applies filtering to already built PackageList
+func (repo *RemoteRepo) ApplyFilter(dependencyOptions int, filterQuery PackageQuery) (oldLen, newLen int, err error) {
+	repo.packageList.PrepareIndex()
 
-		list.PrepareIndex()
+	emptyList := NewPackageList()
+	emptyList.PrepareIndex()
 
-		emptyList := NewPackageList()
-		emptyList.PrepareIndex()
-
-		origPackages := list.Len()
-		list, err = list.Filter([]PackageQuery{filterQuery}, repo.FilterWithDeps, emptyList, dependencyOptions, repo.Architectures)
-		if err != nil {
-			return err
-		}
-
-		progress.Printf("Packages filtered: %d -> %d.\n", origPackages, list.Len())
+	oldLen = repo.packageList.Len()
+	repo.packageList, err = repo.packageList.Filter([]PackageQuery{filterQuery}, repo.FilterWithDeps, emptyList, dependencyOptions, repo.Architectures)
+	if repo.packageList != nil {
+		newLen = repo.packageList.Len()
 	}
+	return
+}
 
-	progress.Printf("Building download queue...\n")
+// BuildDownloadQueue builds queue, discards current PackageList
+func (repo *RemoteRepo) BuildDownloadQueue(packagePool aptly.PackagePool) (queue []PackageDownloadTask, downloadSize int64, err error) {
+	queue = make([]PackageDownloadTask, 0, repo.packageList.Len())
+	seen := make(map[string]struct{}, repo.packageList.Len())
 
-	// Build download queue
-	queued := make(map[string]PackageDownloadTask, list.Len())
-	count := 0
-	downloadSize := int64(0)
-
-	err = list.ForEach(func(p *Package) error {
+	err = repo.packageList.ForEach(func(p *Package) error {
 		list, err2 := p.DownloadList(packagePool)
 		if err2 != nil {
 			return err2
@@ -433,58 +498,31 @@ func (repo *RemoteRepo) Download(progress aptly.Progress, d aptly.Downloader, co
 
 		for _, task := range list {
 			key := task.RepoURI + "-" + task.DestinationPath
-			_, found := queued[key]
+			_, found := seen[key]
 			if !found {
-				count++
+				queue = append(queue, task)
 				downloadSize += task.Checksums.Size
-				queued[key] = task
+				seen[key] = struct{}{}
 			}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("unable to build download queue: %s", err)
+		return
 	}
 
-	repo.packageRefs = NewPackageRefListFromPackageList(list)
+	repo.tempPackageRefs = NewPackageRefListFromPackageList(repo.packageList)
 	// free up package list, we don't need it after this point
-	list = nil
+	repo.packageList = nil
 
-	progress.Printf("Download queue: %d items (%s)\n", count, utils.HumanBytes(downloadSize))
+	return
+}
 
-	progress.InitBar(downloadSize, true)
-
-	// Download all package files
-	ch := make(chan error, len(queued))
-
-	for _, task := range queued {
-		d.DownloadWithChecksum(repo.PackageURL(task.RepoURI).String(), task.DestinationPath, ch, task.Checksums, ignoreMismatch)
-	}
-
-	// We don't need queued after this point
-	queued = nil
-
-	// Wait for all downloads to finish
-	errors := make([]string, 0)
-
-	for count > 0 {
-		err = <-ch
-		if err != nil {
-			errors = append(errors, err.Error())
-		}
-		count--
-	}
-
-	progress.ShutdownBar()
-
-	if len(errors) > 0 {
-		return fmt.Errorf("download errors:\n  %s\n", strings.Join(errors, "\n  "))
-	}
-
+// FinalizeDownload swaps for final value of package refs
+func (repo *RemoteRepo) FinalizeDownload() {
 	repo.LastDownloadDate = time.Now()
-
-	return nil
+	repo.packageRefs = repo.tempPackageRefs
 }
 
 // Encode does msgpack encoding of RemoteRepo
