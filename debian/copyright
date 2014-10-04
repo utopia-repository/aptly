@@ -63,7 +63,7 @@ Files: _vendor/src/github.com/axw/gocov/*
 Copyright: 2012 The Gocov Authors
 License: MIT
 
-Files: _vendor/src/github.com/mattn/goveralls/*
+Files: _vendor/src/github.com/mattn/goveralls/* _vendor/src/github.com/mattn/go-shellwords/*
 Copyright: 2013-2014 Yasuhiro Matsumoto
 License: MIT
 
@@ -109,6 +109,10 @@ Files:_vendor/src/github.com/mitchellh/goamz/exp/sdb/*
 Copyright: 2011 AppsAttic Ltd
 License: LGPL-3
  See: /usr/share/common-licenses/LGPL-3
+
+Files: _vendor/src/github.com/vaughan0/go-ini/*
+Copyright: 2013 Vaughan Newton
+License: MIT
 
 Files: debian/*
 Copyright: 2014 Sebastien Delafond <seb@debian.org>
