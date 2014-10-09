@@ -10,7 +10,7 @@ Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/aptly.git
 
 Package: aptly
 Architecture: any
-Depends: bzip2, gpg, gpgv, ${shlibs:Depends}, ${misc:Depends}
+Depends: bzip2, gnupg, gpgv, ${shlibs:Depends}, ${misc:Depends}
 Description: Swiss army knife for Debian repository management
  It offers several features making it easy to manage Debian package
  repositories:
