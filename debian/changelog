@@ -1,3 +1,10 @@
+aptly (0.8-3) unstable; urgency=medium
+
+  * Correct Vcs-Browser entry (Closes: #764622)
+  * Correct dependency from "gpg" to "gnupg" (Closes: #764619)
+
+ -- Sebastien Delafond <seb@debian.org>  Thu, 09 Oct 2014 18:41:38 +0200
+
 aptly (0.8-2) unstable; urgency=medium
 
   * Add missing dependencies on bzip2, gpg and gpgv
