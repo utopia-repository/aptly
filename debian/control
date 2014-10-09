@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 9.0.0), golang (>= 1.1), golang-go.tools, bash-comp
 Standards-Version: 3.9.5
 Homepage: http://www.aptly.info
 Vcs-Git: git://anonscm.debian.org/collab-maint/aptly.git
-Vcs-Browser: http://anonscm.debian.org/git/collab-maint/aptly.git
+Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/aptly.git
 
 Package: aptly
 Architecture: any
