@@ -1,3 +1,9 @@
+aptly (0.8-2) unstable; urgency=medium
+
+  * Add missing dependencies on bzip2, gpg and gpgv
+
+ -- Sebastien Delafond <seb@debian.org>  Thu, 09 Oct 2014 11:15:21 +0200
+
 aptly (0.8-1) unstable; urgency=medium
 
   * Imported Upstream version 0.8
