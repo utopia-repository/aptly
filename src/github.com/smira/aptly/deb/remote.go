@@ -14,8 +14,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -56,6 +58,8 @@ type RemoteRepo struct {
 	Filter string
 	// FilterWithDeps to include dependencies from filter query
 	FilterWithDeps bool
+	// SkipComponentCheck skips component list verification
+	SkipComponentCheck bool
 	// Status marks state of repository (being updated, no action)
 	Status int
 	// WorkerPID is PID of the process modifying the mirror (if any)
@@ -307,6 +311,9 @@ ok:
 
 	if !repo.IsFlat() {
 		architectures := strings.Split(stanza["Architectures"], " ")
+		sort.Strings(architectures)
+		// "source" architecture is never present, despite Release file claims
+		architectures = utils.StrSlicesSubstract(architectures, []string{"source"})
 		if len(repo.Architectures) == 0 {
 			repo.Architectures = architectures
 		} else {
@@ -318,14 +325,19 @@ ok:
 		}
 
 		components := strings.Split(stanza["Components"], " ")
-		for i := range components {
-			components[i] = path.Base(components[i])
+		if strings.Contains(repo.Distribution, "/") {
+			distributionLast := path.Base(repo.Distribution) + "/"
+			for i := range components {
+				if strings.HasPrefix(components[i], distributionLast) {
+					components[i] = components[i][len(distributionLast):]
+				}
+			}
 		}
 		if len(repo.Components) == 0 {
 			repo.Components = components
-		} else {
+		} else if !repo.SkipComponentCheck {
 			err = utils.StringsIsSubset(repo.Components, components,
-				fmt.Sprintf("component %%s not available in repo %s", repo))
+				fmt.Sprintf("component %%s not available in repo %s, use -force-components to override", repo))
 			if err != nil {
 				return err
 			}
@@ -379,6 +391,8 @@ ok:
 	if err != nil {
 		return err
 	}
+
+	delete(stanza, "SHA512")
 
 	repo.Meta = stanza
 
@@ -454,7 +468,11 @@ func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.
 			}
 			err = repo.packageList.Add(p)
 			if err != nil {
-				return err
+				if _, ok := err.(*PackageConflictError); ok {
+					progress.ColoredPrintf("@y[!]@| @!skipping package %s: duplicate in packages index@|", p)
+				} else {
+					return err
+				}
 			}
 
 			err = collectionFactory.PackageCollection().Update(p)
@@ -593,6 +611,7 @@ func (repo *RemoteRepo) RefKey() []byte {
 
 // RemoteRepoCollection does listing, updating/adding/deleting of RemoteRepos
 type RemoteRepoCollection struct {
+	*sync.RWMutex
 	db   database.Storage
 	list []*RemoteRepo
 }
@@ -600,7 +619,8 @@ type RemoteRepoCollection struct {
 // NewRemoteRepoCollection loads RemoteRepos from DB and makes up collection
 func NewRemoteRepoCollection(db database.Storage) *RemoteRepoCollection {
 	result := &RemoteRepoCollection{
-		db: db,
+		RWMutex: &sync.RWMutex{},
+		db:      db,
 	}
 
 	blobs := db.FetchByPrefix([]byte("R"))

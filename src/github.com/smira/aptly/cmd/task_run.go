@@ -18,13 +18,15 @@ func aptlyTaskRun(cmd *commander.Command, args []string) error {
 		var text string
 		cmdArgs := []string{}
 
-		if finfo, err := os.Stat(filename); os.IsNotExist(err) || finfo.IsDir() {
+		var finfo os.FileInfo
+		if finfo, err = os.Stat(filename); os.IsNotExist(err) || finfo.IsDir() {
 			return fmt.Errorf("no such file, %s\n", filename)
 		}
 
-		fmt.Println("Reading file...\n")
+		fmt.Print("Reading file...\n\n")
 
-		file, err := os.Open(filename)
+		var file *os.File
+		file, err = os.Open(filename)
 
 		if err != nil {
 			return err
@@ -80,6 +82,10 @@ func aptlyTaskRun(cmd *commander.Command, args []string) error {
 
 	for i, command := range cmdList {
 		if !commandErrored {
+			err := context.ReOpenDatabase()
+			if err != nil {
+				return fmt.Errorf("failed to reopen DB: %s", err)
+			}
 			context.Progress().ColoredPrintf("@g%d) [Running]: %s@!", (i + 1), strings.Join(command, " "))
 			context.Progress().ColoredPrintf("\n@yBegin command output: ----------------------------@!")
 			context.Progress().Flush()
@@ -129,16 +135,16 @@ func makeCmdTaskRun() *commander.Command {
 		UsageLine: "run -filename=<filename> | <command1>, <command2>, ...",
 		Short:     "run aptly tasks",
 		Long: `
-Command helps origanise multiple aptly commands in one single aptly task, running as single thread.
+Command helps organise multiple aptly commands in one single aptly task, running as single thread.
 
 Example:
 
-  $ aptly task run
-  > repo create local
-  > repo add local pkg1
-  > publish repo local
-  > serve
-  >
+	  $ aptly task run
+	  > repo create local
+	  > repo add local pkg1
+	  > publish repo local
+	  > serve
+	  >
 
 `,
 	}

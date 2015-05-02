@@ -1,8 +1,10 @@
 package deb
 
 import (
+	"bufio"
 	"bytes"
 	"code.google.com/p/go-uuid/uuid"
+	"encoding/json"
 	"fmt"
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/database"
@@ -14,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,6 +57,21 @@ type PublishedRepo struct {
 
 	// True if repo is being re-published
 	rePublishing bool
+}
+
+// ParsePrefix splits [storage:]prefix into components
+func ParsePrefix(param string) (storage, prefix string) {
+	i := strings.LastIndex(param, ":")
+	if i != -1 {
+		storage = param[:i]
+		prefix = param[i+1:]
+		if prefix == "" {
+			prefix = "."
+		}
+	} else {
+		prefix = param
+	}
+	return
 }
 
 // walkUpTree goes from source in the tree of source snapshots/mirrors/local repos
@@ -237,6 +255,40 @@ func NewPublishedRepo(storage, prefix, distribution string, architectures []stri
 	result.Distribution = distribution
 
 	return result, nil
+}
+
+// MarshalJSON requires object to be "loeaded completely"
+func (p *PublishedRepo) MarshalJSON() ([]byte, error) {
+	type sourceInfo struct {
+		Component, Name string
+	}
+
+	sources := []sourceInfo{}
+	for component, item := range p.sourceItems {
+		name := ""
+		if item.snapshot != nil {
+			name = item.snapshot.Name
+		} else if item.localRepo != nil {
+			name = item.localRepo.Name
+		} else {
+			panic("no snapshot/local repo")
+		}
+		sources = append(sources, sourceInfo{
+			Component: component,
+			Name:      name,
+		})
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"Architectures": p.Architectures,
+		"Distribution":  p.Distribution,
+		"Label":         p.Label,
+		"Origin":        p.Origin,
+		"Prefix":        p.Prefix,
+		"SourceKind":    p.SourceKind,
+		"Sources":       sources,
+		"Storage":       p.Storage,
+	})
 }
 
 // String returns human-readable represenation of PublishedRepo
@@ -471,7 +523,9 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 			progress.InitBar(int64(list.Len()), false)
 		}
 
-		err = list.ForEach(func(pkg *Package) error {
+		list.PrepareIndex()
+
+		err = list.ForEachIndexed(func(pkg *Package) error {
 			if progress != nil {
 				progress.AddBar(1)
 			}
@@ -494,12 +548,14 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 
 			for _, arch := range p.Architectures {
 				if pkg.MatchesArchitecture(arch) {
-					bufWriter, err := indexes.PackageIndex(component, arch, pkg.IsUdeb).BufWriter()
+					var bufWriter *bufio.Writer
+
+					bufWriter, err = indexes.PackageIndex(component, arch, pkg.IsUdeb).BufWriter()
 					if err != nil {
 						return err
 					}
 
-					err = pkg.Stanza().WriteTo(bufWriter)
+					err = pkg.Stanza().WriteTo(bufWriter, pkg.IsSource, false)
 					if err != nil {
 						return err
 					}
@@ -545,9 +601,10 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 				release["Origin"] = p.GetOrigin()
 				release["Label"] = p.GetLabel()
 
-				bufWriter, err := indexes.ReleaseIndex(component, arch, udeb).BufWriter()
+				var bufWriter *bufio.Writer
+				bufWriter, err = indexes.ReleaseIndex(component, arch, udeb).BufWriter()
 
-				err = release.WriteTo(bufWriter)
+				err = release.WriteTo(bufWriter, false, true)
 				if err != nil {
 					return fmt.Errorf("unable to create Release file: %s", err)
 				}
@@ -567,6 +624,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 	release := make(Stanza)
 	release["Origin"] = p.GetOrigin()
 	release["Label"] = p.GetLabel()
+	release["Suite"] = p.Distribution
 	release["Codename"] = p.Distribution
 	release["Date"] = time.Now().UTC().Format("Mon, 2 Jan 2006 15:04:05 MST")
 	release["Architectures"] = strings.Join(utils.StrSlicesSubstract(p.Architectures, []string{"source"}), " ")
@@ -589,7 +647,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 		return err
 	}
 
-	err = release.WriteTo(bufWriter)
+	err = release.WriteTo(bufWriter, false, true)
 	if err != nil {
 		return fmt.Errorf("unable to create Release file: %s", err)
 	}
@@ -648,6 +706,7 @@ func (p *PublishedRepo) RemoveFiles(publishedStorageProvider aptly.PublishedStor
 
 // PublishedRepoCollection does listing, updating/adding/deleting of PublishedRepos
 type PublishedRepoCollection struct {
+	*sync.RWMutex
 	db   database.Storage
 	list []*PublishedRepo
 }
@@ -655,7 +714,8 @@ type PublishedRepoCollection struct {
 // NewPublishedRepoCollection loads PublishedRepos from DB and makes up collection
 func NewPublishedRepoCollection(db database.Storage) *PublishedRepoCollection {
 	result := &PublishedRepoCollection{
-		db: db,
+		RWMutex: &sync.RWMutex{},
+		db:      db,
 	}
 
 	blobs := db.FetchByPrefix([]byte("U"))

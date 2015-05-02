@@ -72,15 +72,15 @@ func aptlyPackageShow(cmd *commander.Command, args []string) error {
 		return fmt.Errorf("unable to show: %s", err)
 	}
 
-	withFiles := context.flags.Lookup("with-files").Value.Get().(bool)
-	withReferences := context.flags.Lookup("with-references").Value.Get().(bool)
+	withFiles := context.Flags().Lookup("with-files").Value.Get().(bool)
+	withReferences := context.Flags().Lookup("with-references").Value.Get().(bool)
 
 	w := bufio.NewWriter(os.Stdout)
 
 	result := q.Query(context.CollectionFactory().PackageCollection())
 
 	err = result.ForEach(func(p *deb.Package) error {
-		p.Stanza().WriteTo(w)
+		p.Stanza().WriteTo(w, p.IsSource, false)
 		w.Flush()
 		fmt.Printf("\n")
 
@@ -116,7 +116,7 @@ func makeCmdPackageShow() *commander.Command {
 	cmd := &commander.Command{
 		Run:       aptlyPackageShow,
 		UsageLine: "show <package-query>",
-		Short:     "show details about packages matcing query",
+		Short:     "show details about packages matching query",
 		Long: `
 Command shows displays detailed meta-information about packages
 matching query. Information from Debian control file is displayed.

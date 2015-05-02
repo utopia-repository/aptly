@@ -249,8 +249,11 @@ class CreateMirror21Test(BaseTest):
         def removeSHA512(s):
             return re.sub(r"SHA512: .+\n", "", s)
 
+        def removeDates(s):
+            return re.sub(r"(Date|Valid-Until): [,0-9:+A-Za-z -]+\n", "", s)
+
         self.check_output()
-        self.check_cmd_output("aptly mirror show mirror21", "mirror_show", match_prepare=removeSHA512)
+        self.check_cmd_output("aptly mirror show mirror21", "mirror_show", match_prepare=lambda s: removeSHA512(removeDates(s)))
 
 
 class CreateMirror22Test(BaseTest):
@@ -306,3 +309,28 @@ class CreateMirror26Test(BaseTest):
     runCmd = "aptly mirror create -keyring=aptlytest.gpg -with-udebs mirror26 http://pkg.jenkins-ci.org/debian-stable binary/"
     fixtureGpg = True
     expectedCode = 1
+
+
+class CreateMirror27Test(BaseTest):
+    """
+    create mirror: component with slashes, no stripping
+    """
+    runCmd = "aptly mirror create --ignore-signatures mirror27 http://linux.dell.com/repo/community/ubuntu wheezy openmanage/740"
+
+    def check(self):
+        self.check_output()
+        self.check_cmd_output("aptly mirror show mirror27", "mirror_show")
+
+
+class CreateMirror28Test(BaseTest):
+    """
+    create mirror: -force-components
+    """
+    runCmd = "aptly mirror create -ignore-signatures -force-components mirror28 http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen"
+
+    def check(self):
+        def removeDates(s):
+            return re.sub(r"(Date|Valid-Until): [,0-9:+A-Za-z -]+\n", "", s)
+
+        self.check_output()
+        self.check_cmd_output("aptly mirror show mirror28", "mirror_show", match_prepare=removeDates)

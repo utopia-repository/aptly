@@ -8,8 +8,11 @@ aptly
 .. image:: https://coveralls.io/repos/smira/aptly/badge.png?branch=HEAD
     :target: https://coveralls.io/r/smira/aptly?branch=HEAD
 
-.. image:: http://gobuild.io/badge/github.com/smira/aptly/download.png
-    :target: http://gobuild.io/github.com/smira/aptly
+.. image:: https://badges.gitter.im/Join Chat.svg
+    :target: https://gitter.im/smira/aptly?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+
+.. image:: http://goreportcard.com/badge/gojp/goreportcard
+    :target: http://goreportcard.com/report/gojp/goreportcard
 
 Aptly is a swiss army knife for Debian repository management.
 
@@ -28,6 +31,7 @@ Aptly features: ("+" means planned features)
 * merge two or more snapshots into one
 * filter repository by search query, pulling dependencies when required
 * publish self-made packages as Debian repositories
+* REST API for remote access
 * mirror repositories "as-is" (without resigning with user's key) (+)
 * support for yum repositories (+)
 
@@ -44,8 +48,7 @@ To install aptly on Debian/Ubuntu, add new repository to /etc/apt/sources.list::
 
 And import key that is used to sign the release::
 
-    $ gpg --keyserver keys.gnupg.net --recv-keys 2A194991
-    $ gpg -a --export 2A194991 | sudo apt-key add -
+    $ apt-key adv --keyserver keys.gnupg.net --recv-keys E083A3782A194991
 
 After that you can install aptly as any other software package::
 
@@ -55,9 +58,13 @@ After that you can install aptly as any other software package::
 Don't worry about squeeze part in repo name: aptly package should work on Debian squeeze+,
 Ubuntu 10.0+. Package contains aptly binary, man page and bash completion.
 
+If you would like to use nightly builds (unstable), please use following repository::
+
+    deb http://repo.aptly.info/ nightly main
+
 Binary executables (depends almost only on libc) are available for download from `Bintray <http://dl.bintray.com/smira/aptly/>`_.
 
-If you have Go environment set up, you can build aptly from source by running (go 1.2+ required)::
+If you have Go environment set up, you can build aptly from source by running (go 1.3+ required)::
 
     go get -u github.com/mattn/gom
     mkdir -p $GOPATH/src/github.com/smira/aptly

@@ -9,9 +9,10 @@ import (
 	"github.com/smira/aptly/files"
 	"github.com/ugorji/go/codec"
 	"io/ioutil"
-	. "launchpad.net/gocheck"
 	"os"
 	"path/filepath"
+
+	. "gopkg.in/check.v1"
 )
 
 type pathExistsChecker struct {
@@ -34,6 +35,9 @@ func (n *NullSigner) Init() error {
 }
 
 func (n *NullSigner) SetKey(keyRef string) {
+}
+
+func (n *NullSigner) SetBatch(batch bool) {
 }
 
 func (n *NullSigner) SetKeyRing(keyring, secretKeyring string) {
