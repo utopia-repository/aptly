@@ -2,6 +2,8 @@ package deb
 
 import (
 	"bytes"
+	"encoding/json"
+	"github.com/AlekSi/pointer"
 	"github.com/ugorji/go/codec"
 	"sort"
 )
@@ -92,6 +94,21 @@ func (l *PackageRefList) Has(p *Package) bool {
 	return i < len(l.Refs) && bytes.Compare(l.Refs[i], key) == 0
 }
 
+// Strings builds list of strings with package keys
+func (l *PackageRefList) Strings() []string {
+	if l == nil {
+		return []string{}
+	}
+
+	result := make([]string, l.Len())
+
+	for i := 0; i < l.Len(); i++ {
+		result[i] = string(l.Refs[i])
+	}
+
+	return result
+}
+
 // Substract returns all packages in l that are not in r
 func (l *PackageRefList) Substract(r *PackageRefList) *PackageRefList {
 	result := &PackageRefList{Refs: make([][]byte, 0, 128)}
@@ -137,6 +154,27 @@ func (l *PackageRefList) Substract(r *PackageRefList) *PackageRefList {
 // If right is nil, package is present only in left
 type PackageDiff struct {
 	Left, Right *Package
+}
+
+// Check interface
+var (
+	_ json.Marshaler = PackageDiff{}
+)
+
+// MarshalJSON implements json.Marshaler interface
+func (d PackageDiff) MarshalJSON() ([]byte, error) {
+	serialized := struct {
+		Left, Right *string
+	}{}
+
+	if d.Left != nil {
+		serialized.Left = pointer.ToString(string(d.Left.Key("")))
+	}
+	if d.Right != nil {
+		serialized.Right = pointer.ToString(string(d.Right.Key("")))
+	}
+
+	return json.Marshal(serialized)
 }
 
 // PackageDiffs is a list of PackageDiff records
@@ -232,8 +270,9 @@ func (l *PackageRefList) Diff(r *PackageRefList, packageCollection *PackageColle
 
 // Merge merges reflist r into current reflist. If overrideMatching, merge
 // replaces matching packages (by architecture/name) with reference from r.
-// Otherwise, all packages are saved.
-func (l *PackageRefList) Merge(r *PackageRefList, overrideMatching bool) (result *PackageRefList) {
+// If ignoreConflicting is set, all packages are preserved, otherwise conflciting
+// packages are overwritten with packages from "right" snapshot.
+func (l *PackageRefList) Merge(r *PackageRefList, overrideMatching, ignoreConflicting bool) (result *PackageRefList) {
 	var overriddenArch, overridenName []byte
 
 	// pointer to left and right reflists
@@ -270,13 +309,23 @@ func (l *PackageRefList) Merge(r *PackageRefList, overrideMatching bool) (result
 			overridenName = nil
 			overriddenArch = nil
 		} else {
+			partsL := bytes.Split(rl, []byte(" "))
+			archL, nameL, versionL := partsL[0][1:], partsL[1], partsL[2]
+
+			partsR := bytes.Split(rr, []byte(" "))
+			archR, nameR, versionR := partsR[0][1:], partsR[1], partsR[2]
+
+			if !ignoreConflicting && bytes.Equal(archL, archR) && bytes.Equal(nameL, nameR) && bytes.Equal(versionL, versionR) {
+				// conflicting duplicates with same arch, name, version, but different file hash
+				result.Refs = append(result.Refs, r.Refs[ir])
+				il++
+				ir++
+				overridenName = nil
+				overriddenArch = nil
+				continue
+			}
+
 			if overrideMatching {
-				partsL := bytes.Split(rl, []byte(" "))
-				archL, nameL := partsL[0][1:], partsL[1]
-
-				partsR := bytes.Split(rr, []byte(" "))
-				archR, nameR := partsR[0][1:], partsR[1]
-
 				if bytes.Equal(archL, overriddenArch) && bytes.Equal(nameL, overridenName) {
 					// this package has already been overriden on the right
 					il++
@@ -314,15 +363,15 @@ func (l *PackageRefList) Merge(r *PackageRefList, overrideMatching bool) (result
 // packages and reduces it to only the latest of each package. The operations
 // are done in-place. This implements a "latest wins" approach which can be used
 // while merging two or more snapshots together.
-func FilterLatestRefs(r *PackageRefList) {
+func (l *PackageRefList) FilterLatestRefs() {
 	var (
 		lastArch, lastName, lastVer []byte
 		arch, name, ver             []byte
 		parts                       [][]byte
 	)
 
-	for i := 0; i < len(r.Refs); i++ {
-		parts = bytes.Split(r.Refs[i][1:], []byte(" "))
+	for i := 0; i < len(l.Refs); i++ {
+		parts = bytes.Split(l.Refs[i][1:], []byte(" "))
 		arch, name, ver = parts[0], parts[1], parts[2]
 
 		if bytes.Equal(arch, lastArch) && bytes.Equal(name, lastName) {
@@ -332,10 +381,10 @@ func FilterLatestRefs(r *PackageRefList) {
 			// Remove the older refs from the result
 			if vres > 0 {
 				// ver[i] > ver[i-1], remove element i-1
-				r.Refs = append(r.Refs[:i-1], r.Refs[i:]...)
+				l.Refs = append(l.Refs[:i-1], l.Refs[i:]...)
 			} else {
 				// ver[i] < ver[i-1], remove element i
-				r.Refs = append(r.Refs[:i], r.Refs[i+1:]...)
+				l.Refs = append(l.Refs[:i], l.Refs[i+1:]...)
 				arch, name, ver = lastArch, lastName, lastVer
 			}
 

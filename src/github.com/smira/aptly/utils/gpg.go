@@ -18,6 +18,7 @@ type Signer interface {
 	SetKey(keyRef string)
 	SetKeyRing(keyring, secretKeyring string)
 	SetPassphrase(passphrase, passphraseFile string)
+	SetBatch(batch bool)
 	DetachedSign(source string, destination string) error
 	ClearSign(source string, destination string) error
 }
@@ -42,6 +43,12 @@ type GpgSigner struct {
 	keyRef                     string
 	keyring, secretKeyring     string
 	passphrase, passphraseFile string
+	batch                      bool
+}
+
+// SetBatch control --no-tty flag to gpg
+func (g *GpgSigner) SetBatch(batch bool) {
+	g.batch = batch
 }
 
 // SetKey sets key ID to use when signing files
@@ -72,12 +79,20 @@ func (g *GpgSigner) gpgArgs() []string {
 		args = append(args, "-u", g.keyRef)
 	}
 
+	if g.passphrase != "" || g.passphraseFile != "" {
+		args = append(args, "--no-use-agent")
+	}
+
 	if g.passphrase != "" {
 		args = append(args, "--passphrase", g.passphrase)
 	}
 
 	if g.passphraseFile != "" {
 		args = append(args, "--passphrase-file", g.passphraseFile)
+	}
+
+	if g.batch {
+		args = append(args, "--no-tty")
 	}
 
 	return args
@@ -142,7 +157,7 @@ func (g *GpgVerifier) InitKeyring() error {
 		if err == nil && len(output) == 0 {
 			fmt.Printf("\nLooks like your keyring with trusted keys is empty. You might consider importing some keys.\n")
 			fmt.Printf("If you're running Debian or Ubuntu, it's a good idea to import current archive keys by running:\n\n")
-			fmt.Printf("  gpg --keyring /usr/share/keyrings/debian-archive-keyring.gpg --export | gpg --no-default-keyring --keyring trustedkeys.gpg --import\n")
+			fmt.Printf("  gpg --no-default-keyring --keyring /usr/share/keyrings/debian-archive-keyring.gpg --export | gpg --no-default-keyring --keyring trustedkeys.gpg --import\n")
 			fmt.Printf("\n(for Ubuntu, use /usr/share/keyrings/ubuntu-archive-keyring.gpg)\n\n")
 		}
 	}
@@ -203,7 +218,7 @@ func (g *GpgVerifier) runGpgv(args []string, context string) error {
 				strings.Join(keyIDs, " "))
 
 			fmt.Printf("Sometimes keys are stored in repository root in file named Release.key, to import such key:\n\n")
-			fmt.Printf("wget -O - http://some.repo/repository/Release.key | gpg --no-default-keyring --keyring trustedkeys.gpg --import\n\n")
+			fmt.Printf("wget -O - https://some.repo/repository/Release.key | gpg --no-default-keyring --keyring trustedkeys.gpg --import\n\n")
 		}
 		return fmt.Errorf("verification of %s failed: %s", context, err)
 	}

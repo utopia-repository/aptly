@@ -7,12 +7,13 @@ import (
 	"github.com/smira/aptly/database"
 	"github.com/ugorji/go/codec"
 	"log"
+	"sync"
 )
 
 // LocalRepo is a collection of packages created locally
 type LocalRepo struct {
 	// Permanent internal ID
-	UUID string
+	UUID string `json:"-"`
 	// User-assigned name
 	Name string
 	// Comment
@@ -88,6 +89,7 @@ func (repo *LocalRepo) RefKey() []byte {
 
 // LocalRepoCollection does listing, updating/adding/deleting of LocalRepos
 type LocalRepoCollection struct {
+	*sync.RWMutex
 	db   database.Storage
 	list []*LocalRepo
 }
@@ -95,7 +97,8 @@ type LocalRepoCollection struct {
 // NewLocalRepoCollection loads LocalRepos from DB and makes up collection
 func NewLocalRepoCollection(db database.Storage) *LocalRepoCollection {
 	result := &LocalRepoCollection{
-		db: db,
+		RWMutex: &sync.RWMutex{},
+		db:      db,
 	}
 
 	blobs := db.FetchByPrefix([]byte("L"))
@@ -104,7 +107,7 @@ func NewLocalRepoCollection(db database.Storage) *LocalRepoCollection {
 	for _, blob := range blobs {
 		r := &LocalRepo{}
 		if err := r.Decode(blob); err != nil {
-			log.Printf("Error decoding mirror: %s\n", err)
+			log.Printf("Error decoding repo: %s\n", err)
 		} else {
 			result.list = append(result.list, r)
 		}

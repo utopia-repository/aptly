@@ -16,6 +16,17 @@ import (
 	"strings"
 )
 
+// HTTPError is download error connected to HTTP code
+type HTTPError struct {
+	Code int
+	URL  string
+}
+
+// Error
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("HTTP code %d while fetching %s", e.Code, e.URL)
+}
+
 // Check interface
 var (
 	_ aptly.Downloader = (*downloaderImpl)(nil)
@@ -129,7 +140,19 @@ func (downloader *downloaderImpl) DownloadWithChecksum(url string, destination s
 func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 	downloader.progress.Printf("Downloading %s...\n", task.url)
 
-	resp, err := downloader.client.Get(task.url)
+	req, err := http.NewRequest("GET", task.url, nil)
+	if err != nil {
+		task.result <- fmt.Errorf("%s: %s", task.url, err)
+		return
+	}
+
+	proxyURL, _ := downloader.client.Transport.(*http.Transport).Proxy(req)
+	if proxyURL == nil && (req.URL.Scheme == "http" || req.URL.Scheme == "https") {
+		req.URL.Opaque = strings.Replace(req.URL.RequestURI(), "+", "%2b", -1)
+		req.URL.RawQuery = ""
+	}
+
+	resp, err := downloader.client.Do(req)
 	if err != nil {
 		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
@@ -139,7 +162,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		task.result <- fmt.Errorf("HTTP code %d while fetching %s", resp.StatusCode, task.url)
+		task.result <- &HTTPError{Code: resp.StatusCode, URL: task.url}
 		return
 	}
 
@@ -307,13 +330,16 @@ func DownloadTryCompression(downloader aptly.Downloader, url string, expectedChe
 		}
 
 		if err != nil {
-			continue
+			if err1, ok := err.(*HTTPError); ok && (err1.Code == 404 || err1.Code == 403) {
+				continue
+			}
+			return nil, nil, err
 		}
 
 		var uncompressed io.Reader
 		uncompressed, err = method.transformation(file)
 		if err != nil {
-			continue
+			return nil, nil, err
 		}
 
 		return uncompressed, file, err

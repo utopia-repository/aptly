@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/smira/aptly/deb"
+	"github.com/smira/aptly/utils"
 	"github.com/smira/commander"
 	"github.com/smira/flag"
 	"strings"
@@ -11,7 +12,7 @@ import (
 func aptlyPublishSwitch(cmd *commander.Command, args []string) error {
 	var err error
 
-	components := strings.Split(context.flags.Lookup("component").Value.String(), ",")
+	components := strings.Split(context.Flags().Lookup("component").Value.String(), ",")
 
 	if len(args) < len(components)+1 || len(args) > len(components)+2 {
 		cmd.Usage()
@@ -33,7 +34,7 @@ func aptlyPublishSwitch(cmd *commander.Command, args []string) error {
 		names = args[1:]
 	}
 
-	storage, prefix := parsePrefix(param)
+	storage, prefix := deb.ParsePrefix(param)
 
 	var published *deb.PublishedRepo
 
@@ -61,6 +62,10 @@ func aptlyPublishSwitch(cmd *commander.Command, args []string) error {
 	}
 
 	for i, component := range components {
+		if !utils.StrSliceHasItem(publishedComponents, component) {
+			return fmt.Errorf("unable to switch: component %s is not in published repository", component)
+		}
+
 		snapshot, err = context.CollectionFactory().SnapshotCollection().ByName(names[i])
 		if err != nil {
 			return fmt.Errorf("unable to switch: %s", err)
@@ -74,12 +79,12 @@ func aptlyPublishSwitch(cmd *commander.Command, args []string) error {
 		published.UpdateSnapshot(component, snapshot)
 	}
 
-	signer, err := getSigner(context.flags)
+	signer, err := getSigner(context.Flags())
 	if err != nil {
 		return fmt.Errorf("unable to initialize GPG signer: %s", err)
 	}
 
-	forceOverwrite := context.flags.Lookup("force-overwrite").Value.Get().(bool)
+	forceOverwrite := context.Flags().Lookup("force-overwrite").Value.Get().(bool)
 	if forceOverwrite {
 		context.Progress().ColoredPrintf("@rWARNING@|: force overwrite mode enabled, aptly might corrupt other published repositories sharing " +
 			"the same package pool.\n")
@@ -112,7 +117,7 @@ func makeCmdPublishSwitch() *commander.Command {
 		UsageLine: "switch <distribution> [[<endpoint>:]<prefix>] <new-snapshot>",
 		Short:     "update published repository by switching to new snapshot",
 		Long: `
-Command switches in-place published repository with new snapshot contents. All
+Command switches in-place published snapshots with new snapshot contents. All
 publishing parameters are preserved (architecture list, distribution,
 component).
 
@@ -120,11 +125,14 @@ For multiple component repositories, flag -component should be given with
 list of components to update. Corresponding snapshots should be given in the
 same order, e.g.:
 
-	aptly publish update -component=main,contrib wheezy wh-main wh-contrib
+	aptly publish switch -component=main,contrib wheezy wh-main wh-contrib
 
 Example:
 
-    $ aptly publish update wheezy ppa wheezy-7.5
+    $ aptly publish switch wheezy ppa wheezy-7.5
+
+This command would switch published repository (with one component) named ppa/wheezy
+(prefix ppa, dsitribution wheezy to new snapshot wheezy-7.5).
 `,
 		Flag: *flag.NewFlagSet("aptly-publish-switch", flag.ExitOnError),
 	}
@@ -133,6 +141,7 @@ Example:
 	cmd.Flag.String("secret-keyring", "", "GPG secret keyring to use (instead of default)")
 	cmd.Flag.String("passphrase", "", "GPG passhprase for the key (warning: could be insecure)")
 	cmd.Flag.String("passphrase-file", "", "GPG passhprase-file for the key (warning: could be insecure)")
+	cmd.Flag.Bool("batch", false, "run GPG with detached tty")
 	cmd.Flag.Bool("skip-signing", false, "don't sign Release files with GPG")
 	cmd.Flag.String("component", "", "component names to update (for multi-component publishing, separate components with commas)")
 	cmd.Flag.Bool("force-overwrite", false, "overwrite files in package pool in case of mismatch")

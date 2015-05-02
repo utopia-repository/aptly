@@ -9,7 +9,6 @@ package leveldb
 import (
 	"fmt"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"github.com/syndtr/goleveldb/leveldb/cache"
@@ -84,6 +83,18 @@ type tFiles []*tFile
 func (tf tFiles) Len() int      { return len(tf) }
 func (tf tFiles) Swap(i, j int) { tf[i], tf[j] = tf[j], tf[i] }
 
+func (tf tFiles) nums() string {
+	x := "[ "
+	for i, f := range tf {
+		if i != 0 {
+			x += ", "
+		}
+		x += fmt.Sprint(f.file.Num())
+	}
+	x += " ]"
+	return x
+}
+
 // Returns true if i smallest key is less than j.
 // This used for sort by key in ascending order.
 func (tf tFiles) lessByKey(icmp *iComparer, i, j int) bool {
@@ -151,7 +162,7 @@ func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) boo
 	i := 0
 	if len(umin) > 0 {
 		// Find the earliest possible internal key for min.
-		i = tf.searchMax(icmp, newIKey(umin, kMaxSeq, tSeek))
+		i = tf.searchMax(icmp, newIkey(umin, kMaxSeq, ktSeek))
 	}
 	if i >= len(tf) {
 		// Beginning of range is after all files, so no overlap.
@@ -161,24 +172,25 @@ func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) boo
 }
 
 // Returns tables whose its key range overlaps with given key range.
-// If overlapped is true then the search will be expanded to tables that
-// overlaps with each other.
+// Range will be expanded if ukey found hop across tables.
+// If overlapped is true then the search will be restarted if umax
+// expanded.
+// The dst content will be overwritten.
 func (tf tFiles) getOverlaps(dst tFiles, icmp *iComparer, umin, umax []byte, overlapped bool) tFiles {
-	x := len(dst)
+	dst = dst[:0]
 	for i := 0; i < len(tf); {
 		t := tf[i]
 		if t.overlaps(icmp, umin, umax) {
-			if overlapped {
-				// For overlapped files, check if the newly added file has
-				// expanded the range. If so, restart search.
-				if umin != nil && icmp.uCompare(t.imin.ukey(), umin) < 0 {
-					umin = t.imin.ukey()
-					dst = dst[:x]
-					i = 0
-					continue
-				} else if umax != nil && icmp.uCompare(t.imax.ukey(), umax) > 0 {
-					umax = t.imax.ukey()
-					dst = dst[:x]
+			if umin != nil && icmp.uCompare(t.imin.ukey(), umin) < 0 {
+				umin = t.imin.ukey()
+				dst = dst[:0]
+				i = 0
+				continue
+			} else if umax != nil && icmp.uCompare(t.imax.ukey(), umax) > 0 {
+				umax = t.imax.ukey()
+				// Restart search if it is overlapped.
+				if overlapped {
+					dst = dst[:0]
 					i = 0
 					continue
 				}
@@ -278,8 +290,6 @@ type tOps struct {
 	cache   cache.Cache
 	cacheNS cache.Namespace
 	bpool   *util.BufferPool
-	mu      sync.Mutex
-	closed  bool
 }
 
 // Creates an empty table and returns table writer.
@@ -293,7 +303,7 @@ func (t *tOps) create() (*tWriter, error) {
 		t:    t,
 		file: file,
 		w:    fw,
-		tw:   table.NewWriter(fw, t.s.o),
+		tw:   table.NewWriter(fw, t.s.o.Options),
 	}, nil
 }
 
@@ -326,42 +336,9 @@ func (t *tOps) createFrom(src iterator.Iterator) (f *tFile, n int, err error) {
 	return
 }
 
-type trWrapper struct {
-	*table.Reader
-	t   *tOps
-	ref int
-}
-
-func (w *trWrapper) Release() {
-	if w.ref != 0 && !w.t.closed {
-		panic(fmt.Sprintf("BUG: invalid ref %d, refer to issue #72", w.ref))
-	}
-	w.Reader.Release()
-}
-
-type trCacheHandleWrapper struct {
-	cache.Handle
-	t        *tOps
-	released bool
-}
-
-func (w *trCacheHandleWrapper) Release() {
-	w.t.mu.Lock()
-	defer w.t.mu.Unlock()
-
-	if !w.released {
-		w.released = true
-		w.Value().(*trWrapper).ref--
-	}
-	w.Handle.Release()
-}
-
 // Opens table. It returns a cache handle, which should
 // be released after use.
 func (t *tOps) open(f *tFile) (ch cache.Handle, err error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	num := f.file.Num()
 	ch = t.cacheNS.Get(num, func() (charge int, value interface{}) {
 		var r storage.Reader
@@ -374,13 +351,17 @@ func (t *tOps) open(f *tFile) (ch cache.Handle, err error) {
 		if bc := t.s.o.GetBlockCache(); bc != nil {
 			bcacheNS = bc.GetNamespace(num)
 		}
-		return 1, &trWrapper{table.NewReader(r, int64(f.size), bcacheNS, t.bpool, t.s.o), t, 0}
+		var tr *table.Reader
+		tr, err = table.NewReader(r, int64(f.size), storage.NewFileInfo(f.file), bcacheNS, t.bpool, t.s.o.Options)
+		if err != nil {
+			r.Close()
+			return 0, nil
+		}
+		return 1, tr
 	})
 	if ch == nil && err == nil {
 		err = ErrClosed
 	}
-	ch.Value().(*trWrapper).ref++
-	ch = &trCacheHandleWrapper{ch, t, false}
 	return
 }
 
@@ -392,7 +373,17 @@ func (t *tOps) find(f *tFile, key []byte, ro *opt.ReadOptions) (rkey, rvalue []b
 		return nil, nil, err
 	}
 	defer ch.Release()
-	return ch.Value().(*trWrapper).Find(key, ro)
+	return ch.Value().(*table.Reader).Find(key, true, ro)
+}
+
+// Finds key that is greater than or equal to the given key.
+func (t *tOps) findKey(f *tFile, key []byte, ro *opt.ReadOptions) (rkey []byte, err error) {
+	ch, err := t.open(f)
+	if err != nil {
+		return nil, err
+	}
+	defer ch.Release()
+	return ch.Value().(*table.Reader).FindKey(key, true, ro)
 }
 
 // Returns approximate offset of the given key.
@@ -402,7 +393,7 @@ func (t *tOps) offsetOf(f *tFile, key []byte) (offset uint64, err error) {
 		return
 	}
 	defer ch.Release()
-	offset_, err := ch.Value().(*trWrapper).OffsetOf(key)
+	offset_, err := ch.Value().(*table.Reader).OffsetOf(key)
 	return uint64(offset_), err
 }
 
@@ -412,7 +403,7 @@ func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) ite
 	if err != nil {
 		return iterator.NewEmptyIterator(err)
 	}
-	iter := ch.Value().(*trWrapper).NewIterator(slice, ro)
+	iter := ch.Value().(*table.Reader).NewIterator(slice, ro)
 	iter.SetReleaser(ch)
 	return iter
 }
@@ -420,9 +411,6 @@ func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) ite
 // Removes table from persistent storage. It waits until
 // no one use the the table.
 func (t *tOps) remove(f *tFile) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	num := f.file.Num()
 	t.cacheNS.Delete(num, func(exist, pending bool) {
 		if !pending {
@@ -441,10 +429,6 @@ func (t *tOps) remove(f *tFile) {
 // Closes the table ops instance. It will close all tables,
 // regadless still used or not.
 func (t *tOps) close() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.closed = true
 	t.cache.Zap()
 	t.bpool.Close()
 }
@@ -486,28 +470,34 @@ func (w *tWriter) empty() bool {
 	return w.first == nil
 }
 
+// Closes the storage.Writer.
+func (w *tWriter) close() {
+	if w.w != nil {
+		w.w.Close()
+		w.w = nil
+	}
+}
+
 // Finalizes the table and returns table file.
 func (w *tWriter) finish() (f *tFile, err error) {
+	defer w.close()
 	err = w.tw.Close()
 	if err != nil {
 		return
 	}
 	err = w.w.Sync()
 	if err != nil {
-		w.w.Close()
 		return
 	}
-	w.w.Close()
 	f = newTableFile(w.file, uint64(w.tw.BytesLen()), iKey(w.first), iKey(w.last))
 	return
 }
 
 // Drops the table.
 func (w *tWriter) drop() {
-	w.w.Close()
+	w.close()
 	w.file.Remove()
 	w.t.s.reuseFileNum(w.file.Num())
-	w.w = nil
 	w.file = nil
 	w.tw = nil
 	w.first = nil

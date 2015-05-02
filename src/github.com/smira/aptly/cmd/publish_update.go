@@ -20,7 +20,7 @@ func aptlyPublishUpdate(cmd *commander.Command, args []string) error {
 	if len(args) == 2 {
 		param = args[1]
 	}
-	storage, prefix := parsePrefix(param)
+	storage, prefix := deb.ParsePrefix(param)
 
 	var published *deb.PublishedRepo
 
@@ -43,12 +43,12 @@ func aptlyPublishUpdate(cmd *commander.Command, args []string) error {
 		published.UpdateLocalRepo(component)
 	}
 
-	signer, err := getSigner(context.flags)
+	signer, err := getSigner(context.Flags())
 	if err != nil {
 		return fmt.Errorf("unable to initialize GPG signer: %s", err)
 	}
 
-	forceOverwrite := context.flags.Lookup("force-overwrite").Value.Get().(bool)
+	forceOverwrite := context.Flags().Lookup("force-overwrite").Value.Get().(bool)
 	if forceOverwrite {
 		context.Progress().ColoredPrintf("@rWARNING@|: force overwrite mode enabled, aptly might corrupt other published repositories sharing " +
 			"the same package pool.\n")
@@ -100,6 +100,7 @@ Example:
 	cmd.Flag.String("secret-keyring", "", "GPG secret keyring to use (instead of default)")
 	cmd.Flag.String("passphrase", "", "GPG passhprase for the key (warning: could be insecure)")
 	cmd.Flag.String("passphrase-file", "", "GPG passhprase-file for the key (warning: could be insecure)")
+	cmd.Flag.Bool("batch", false, "run GPG with detached tty")
 	cmd.Flag.Bool("skip-signing", false, "don't sign Release files with GPG")
 	cmd.Flag.Bool("force-overwrite", false, "overwrite files in package pool in case of mismatch")
 

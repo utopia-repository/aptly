@@ -1,6 +1,7 @@
 package deb
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/utils"
@@ -38,6 +39,11 @@ type Package struct {
 	collection *PackageCollection
 }
 
+// Check interface
+var (
+	_ json.Marshaler = &Package{}
+)
+
 // NewPackageFromControlFile creates Package from parsed Debian control file
 func NewPackageFromControlFile(input Stanza) *Package {
 	result := &Package{
@@ -55,12 +61,18 @@ func NewPackageFromControlFile(input Stanza) *Package {
 
 	filesize, _ := strconv.ParseInt(input["Size"], 10, 64)
 
+	md5, ok := input["MD5sum"]
+	if !ok {
+		// there are some broken repos out there with MD5 in wrong field
+		md5 = input["MD5Sum"]
+	}
+
 	result.UpdateFiles(PackageFiles{PackageFile{
 		Filename:     filepath.Base(input["Filename"]),
 		downloadPath: filepath.Dir(input["Filename"]),
 		Checksums: utils.ChecksumInfo{
 			Size:   filesize,
-			MD5:    strings.TrimSpace(input["MD5sum"]),
+			MD5:    strings.TrimSpace(md5),
 			SHA1:   strings.TrimSpace(input["SHA1"]),
 			SHA256: strings.TrimSpace(input["SHA256"]),
 		},
@@ -68,6 +80,7 @@ func NewPackageFromControlFile(input Stanza) *Package {
 
 	delete(input, "Filename")
 	delete(input, "MD5sum")
+	delete(input, "MD5Sum")
 	delete(input, "SHA1")
 	delete(input, "SHA256")
 	delete(input, "Size")
@@ -198,6 +211,16 @@ func (p *Package) String() string {
 	return fmt.Sprintf("%s_%s_%s", p.Name, p.Version, p.Architecture)
 }
 
+// MarshalJSON implements json.Marshaller interface
+func (p *Package) MarshalJSON() ([]byte, error) {
+	stanza := p.Stanza()
+	stanza["FilesHash"] = fmt.Sprintf("%08x", p.FilesHash)
+	stanza["Key"] = string(p.Key(""))
+	stanza["ShortKey"] = string(p.ShortKey(""))
+
+	return json.Marshal(stanza)
+}
+
 // GetField returns fields from package
 func (p *Package) GetField(name string) string {
 	switch name {
@@ -262,7 +285,6 @@ func (p *Package) GetField(name string) string {
 	default:
 		return p.Extra()[name]
 	}
-	return ""
 }
 
 // MatchesArchitecture checks whether packages matches specified architecture
@@ -404,7 +426,9 @@ func (p *Package) Stanza() (result Stanza) {
 		result["Architecture"] = p.SourceArchitecture
 	} else {
 		result["Architecture"] = p.Architecture
-		result["Source"] = p.Source
+		if p.Source != "" {
+			result["Source"] = p.Source
+		}
 	}
 
 	if p.IsSource {

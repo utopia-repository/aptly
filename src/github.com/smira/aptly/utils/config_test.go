@@ -1,9 +1,10 @@
 package utils
 
 import (
-	. "launchpad.net/gocheck"
 	"os"
 	"path/filepath"
+
+	. "gopkg.in/check.v1"
 )
 
 type ConfigSuite struct {
@@ -29,9 +30,12 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 
 	s.config.RootDir = "/tmp/aptly"
 	s.config.DownloadConcurrency = 5
-	s.config.S3PublishRoots = map[string]S3PublishRoot{"test": S3PublishRoot{
+	s.config.S3PublishRoots = map[string]S3PublishRoot{"test": {
 		Region: "us-east-1",
 		Bucket: "repo"}}
+
+	s.config.SwiftPublishRoots = map[string]SwiftPublishRoot{"test": {
+		Container: "repo"}}
 
 	err := SaveConfig(configname, &s.config)
 	c.Assert(err, IsNil)
@@ -69,6 +73,17 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 		"      \"storageClass\": \"\",\n"+
 		"      \"encryptionMethod\": \"\",\n"+
 		"      \"plusWorkaround\": false\n"+
+		"    }\n"+
+		"  },\n"+
+		"  \"SwiftPublishEndpoints\": {\n"+
+		"    \"test\": {\n"+
+		"      \"osname\": \"\",\n"+
+		"      \"password\": \"\",\n"+
+		"      \"authurl\": \"\",\n"+
+		"      \"tenant\": \"\",\n"+
+		"      \"tenantid\": \"\",\n"+
+		"      \"prefix\": \"\",\n"+
+		"      \"container\": \"repo\"\n"+
 		"    }\n"+
 		"  }\n"+
 		"}")

@@ -1,6 +1,6 @@
 GOVERSION=$(shell go version | awk '{print $$3;}')
-PACKAGES=database deb files http query s3 utils
-ALL_PACKAGES=aptly cmd console database deb files http query s3 utils
+PACKAGES=context database deb files http query swift s3 utils
+ALL_PACKAGES=api aptly context cmd console database deb files http query swift s3 utils
 BINPATH=$(abspath ./_vendor/bin)
 GOM_ENVIRONMENT=-test
 PYTHON?=python
@@ -36,7 +36,7 @@ coverage: coverage.out
 	rm -f coverage.out
 
 check:
-	$(GOM) exec go tool vet -all=true -shadow=true $(ALL_PACKAGES:%=./%)
+	$(GOM) exec go tool vet -all=true $(ALL_PACKAGES:%=./%)
 	$(GOM) exec golint $(ALL_PACKAGES:%=./%)
 
 install:
@@ -67,7 +67,7 @@ package:
 	(cd root/etc/bash_completion.d && wget https://raw.github.com/aptly-dev/aptly-bash-completion/master/aptly)
 	gzip root/usr/share/man/man1/aptly.1
 	fpm -s dir -t deb -n aptly -v $(VERSION) --url=http://www.aptly.info/ --license=MIT --vendor="Andrey Smirnov <me@smira.ru>" \
-	   -f -m "Andrey Smirnov <me@smira.ru>" --description="Debian repository management tool" --deb-recommends bzip2 -C root/ .
+	   -f -m "Andrey Smirnov <me@smira.ru>" --description="Debian repository management tool" --deb-recommends bzip2 --deb-recommends graphviz -C root/ .
 	mv aptly_$(VERSION)_*.deb ~
 
 src-package:
@@ -77,6 +77,8 @@ src-package:
 	cd aptly-$(VERSION)/src/github.com/smira/aptly && gom -production install
 	cd aptly-$(VERSION)/src/github.com/smira/aptly && find . \( -name .git -o -name .bzr -o -name .hg \) -print | xargs rm -rf
 	rm -rf aptly-$(VERSION)/src/github.com/smira/aptly/_vendor/{pkg,bin}
+	mkdir -p aptly-$(VERSION)/bash_completion.d
+	(cd aptly-$(VERSION)/bash_completion.d && wget https://raw.github.com/aptly-dev/aptly-bash-completion/$(VERSION)/aptly)
 	tar cyf aptly-$(VERSION)-src.tar.bz2 aptly-$(VERSION)
 	rm -rf aptly-$(VERSION)
 	curl -T aptly-$(VERSION)-src.tar.bz2 -usmira:$(BINTRAY_KEY) https://api.bintray.com/content/smira/aptly/aptly/$(VERSION)/$(VERSION)/aptly-$(VERSION)-src.tar.bz2
