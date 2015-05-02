@@ -42,7 +42,7 @@ Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/goleveldb/leveld
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go.crypto/* src/github.com/smira/aptly/_vendor/src/github.com/smira/flag/* src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/scanner/scanner.go
+Files: src/github.com/smira/aptly/_vendor/src/golang.org/x/crypto/* src/github.com/smira/aptly/_vendor/src/github.com/smira/flag/* src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/scanner/scanner.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
@@ -104,6 +104,30 @@ License: LGPL-3
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/vaughan0/go-ini/*
 Copyright: 2013 Vaughan Newton
+License: MIT
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/gin-gonic/gin/*
+Copyright: 2014 Manuel Martínez-Almeida
+License: MIT
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/jlaffaye/ftp/*
+Copyright: 2011-2013, Julien Laffaye <jlaffaye@FreeBSD.org>
+License: ISC
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/julienschmidt/httprouter/*
+Copyright: 2013 Julien Schmidt
+License: BSD-3-clause
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/ncw/swift/*
+Copyright: 2012 Nick Craig-Wood
+License: MIT
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/gosnappy/*
+Copyright: 2011 The Snappy-Go Authors
+License: BSD-3-clause
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/AlekSi/pointer/*
+Copyright: 2015 Alexey Palazhchenko
 License: MIT
 
 Files: debian/*
@@ -204,3 +228,18 @@ License: MIT
  ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
+
+License: ISC
+ Permission to use, copy, modify, and/or distribute this software for
+ any purpose with or without fee is hereby granted, provided that the
+ above copyright notice and this permission notice appear in all
+ copies.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+ WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+ AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+ DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+ PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ PERFORMANCE OF THIS SOFTWARE.
