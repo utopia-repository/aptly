@@ -1,3 +1,18 @@
+aptly (0.9.1-1~1.gbpe259cf) UNRELEASED; urgency=medium
+
+  ** SNAPSHOT build @e259cf456c56eeb05960921be8a11ea767c8eb58 **
+
+  [ Sébastien Delafond ]
+  * Imported Upstream version 0.8
+  * Imported Upstream version 0.9.1
+  * Document licenses and copyrights for new dependencies
+  * Suggest graphviz
+  * Proper name for bash-completion file
+
+  [ Sebastien Delafond ]
+
+ -- Sébastien Delafond <sdelafond@gmail.com>  Sat, 02 May 2015 12:52:12 +0200
+
 aptly (0.8-3) unstable; urgency=medium
 
   * Correct Vcs-Browser entry (Closes: #764622)
