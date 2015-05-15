@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"unicode"
 )
 
 // Stanza or paragraph of Debian control file
@@ -157,6 +158,35 @@ func init() {
 	multilineFields["MD5Sum"] = true
 }
 
+func canonicalCase(field string) string {
+	upper := strings.ToUpper(field)
+	switch upper {
+	case "SHA1", "SHA256", "SHA512":
+		return upper
+	case "MD5SUM":
+		return "MD5Sum"
+	case "NOTAUTOMATIC":
+		return "NotAutomatic"
+	case "BUTAUTOMATICUPGRADES":
+		return "ButAutomaticUpgrades"
+	}
+
+	startOfWord := true
+
+	return strings.Map(func(r rune) rune {
+		if startOfWord {
+			startOfWord = false
+			return unicode.ToUpper(r)
+		}
+
+		if r == '-' {
+			startOfWord = true
+		}
+
+		return unicode.ToLower(r)
+	}, field)
+}
+
 // ControlFileReader implements reading of control files stanza by stanza
 type ControlFileReader struct {
 	scanner *bufio.Scanner
@@ -195,7 +225,7 @@ func (c *ControlFileReader) ReadStanza() (Stanza, error) {
 			if len(parts) != 2 {
 				return nil, ErrMalformedStanza
 			}
-			lastField = parts[0]
+			lastField = canonicalCase(parts[0])
 			_, lastFieldMultiline = multilineFields[lastField]
 			if lastFieldMultiline {
 				stanza[lastField] = parts[1]

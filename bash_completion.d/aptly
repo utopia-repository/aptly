@@ -572,5 +572,17 @@ _aptly()
           ;;
         esac
       ;;
+      "db")
+        case "$subcmd" in
+          "cleanup")
+            if [[ $numargs -eq 0 ]]; then
+              if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-dry-run -verbose" -- ${cur}))
+              fi
+              return 0
+            fi
+          ;;
+        esac
+      ;;
     esac
 } && complete -F _aptly aptly
