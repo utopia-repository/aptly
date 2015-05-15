@@ -1,3 +1,10 @@
+aptly (0.9.5-1) unstable; urgency=medium
+
+  * Imported Upstream version 0.9.5
+  * Up-to-date bash completion
+
+ -- Sebastien Delafond <seb@debian.org>  Fri, 15 May 2015 10:46:51 +0200
+
 aptly (0.9.1-1) unstable; urgency=medium
 
   * Imported Upstream version 0.9.1
