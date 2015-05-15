@@ -57,7 +57,7 @@ _aptly()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="db graph mirror package publish repo serve snapshot version"
+    commands="api config db graph mirror package publish repo serve snapshot task version"
     options="-architectures= -config= -dep-follow-all-variants -dep-follow-recommends -dep-follow-source -dep-follow-suggests"
 
     db_subcommands="cleanup recover"
@@ -66,6 +66,9 @@ _aptly()
     snapshot_subcommands="create diff drop filter list merge pull rename search show verify"
     repo_subcommands="add copy create drop edit import list move remove rename search show"
     package_subcommands="search show"
+    task_subcommands="run"
+    config_subcommands="show"
+    api_subcommands="serve"
 
     local cmd subcmd numargs numoptions i
 
@@ -131,6 +134,18 @@ _aptly()
               COMPREPLY=($(compgen -W "${package_subcommands}" -- ${cur}))
               return 0
             ;;
+            "task")
+              COMPREPLY=($(compgen -W "${task_subcommands}" -- ${cur}))
+              return 0
+            ;;
+            "config")
+              COMPREPLY=($(compgen -W "${config_subcommands}" -- ${cur}))
+              return 0
+            ;;
+            "api")
+              COMPREPLY=($(compgen -W "${api_subcommands}" -- ${cur}))
+              return 0
+            ;;
             *)
             ;;
         esac
@@ -142,7 +157,7 @@ _aptly()
           "create")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-filter= -filter-with-deps -ignore-signatures -keyring= -with-sources -with-udebs" -- ${cur}))
+                COMPREPLY=($(compgen -W "-filter= -filter-with-deps -force-components -ignore-signatures -keyring= -with-sources -with-udebs" -- ${cur}))
                 return 0
               fi
             fi
@@ -457,7 +472,7 @@ _aptly()
           "snapshot"|"repo")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-force-overwrite -distribution= -component= -gpg-key= -keyring= -label= -origin= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -distribution= -component= -gpg-key= -keyring= -label= -origin= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
               else
                 if [[ "$subcmd" == "snapshot" ]]; then
                   COMPREPLY=($(compgen -W "$(__aptly_snapshot_list)" -- ${cur}))
@@ -482,7 +497,7 @@ _aptly()
           "update")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-force-overwrite -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
               fi
@@ -497,7 +512,7 @@ _aptly()
           "switch")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-force-overwrite -component= -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -component= -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
               fi
@@ -544,6 +559,18 @@ _aptly()
           COMPREPLY=($(compgen -W "-listen=" -- ${cur}))
           return 0
         fi
+      ;;
+      "api")
+        case "$subcmd" in
+          "serve")
+            if [[ $numargs -eq 0 ]]; then
+              if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-listen=" -- ${cur}))
+              fi
+              return 0
+            fi
+          ;;
+        esac
       ;;
     esac
 } && complete -F _aptly aptly
