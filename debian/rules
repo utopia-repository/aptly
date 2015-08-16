@@ -24,7 +24,7 @@ override_dh_auto_clean:
 	rm -fr $(DEST_DIR)
 
 override_dh_auto_build:
-	GOPATH=:$(CURDIR):$(SOURCE_DIR)/_vendor go build -o aptly $(PACKAGE_DIR)/main.go
+	GOPATH=$(CURDIR):$(SOURCE_DIR)/_vendor go build -o aptly $(PACKAGE_DIR)/main.go
 
 override_dh_auto_install:
 	dh_bash-completion
