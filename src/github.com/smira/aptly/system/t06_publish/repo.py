@@ -1,11 +1,19 @@
 import os
 import hashlib
 import inspect
+import zlib
 from lib import BaseTest
 
 
 def strip_processor(output):
     return "\n".join([l for l in output.split("\n") if not l.startswith(' ') and not l.startswith('Date:')])
+
+
+def ungzip_if_required(output):
+    if output.startswith("\x1f\x8b"):
+        return zlib.decompress(output, 16+zlib.MAX_WBITS)
+
+    return output
 
 
 class PublishRepo1Test(BaseTest):
@@ -29,6 +37,7 @@ class PublishRepo1Test(BaseTest):
         self.check_exists('public/dists/maverick/main/binary-i386/Packages')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/Contents-i386.gz')
         self.check_exists('public/dists/maverick/main/source/Sources')
         self.check_exists('public/dists/maverick/main/source/Sources.gz')
         self.check_exists('public/dists/maverick/main/source/Sources.bz2')
@@ -43,6 +52,7 @@ class PublishRepo1Test(BaseTest):
         self.check_file_contents('public/dists/maverick/Release', 'release', match_prepare=strip_processor)
         self.check_file_contents('public/dists/maverick/main/source/Sources', 'sources', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
         self.check_file_contents('public/dists/maverick/main/binary-i386/Packages', 'binary', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+        self.check_file_contents('public/dists/maverick/main/Contents-i386.gz', 'contents_i386', match_prepare=ungzip_if_required)
 
         # verify signatures
         self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
@@ -79,7 +89,7 @@ class PublishRepo1Test(BaseTest):
 
         if pathsSeen != set(['main/binary-i386/Packages', 'main/binary-i386/Packages.bz2', 'main/binary-i386/Packages.gz',
                              'main/source/Sources', 'main/source/Sources.gz', 'main/source/Sources.bz2',
-                             'main/binary-i386/Release', 'main/source/Release']):
+                             'main/binary-i386/Release', 'main/source/Release', 'main/Contents-i386.gz']):
             raise Exception("path seen wrong: %r" % (pathsSeen, ))
 
 
@@ -104,6 +114,7 @@ class PublishRepo2Test(BaseTest):
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/contrib/Contents-i386.gz')
         self.check_exists('public/dists/maverick/contrib/source/Sources')
         self.check_exists('public/dists/maverick/contrib/source/Sources.gz')
         self.check_exists('public/dists/maverick/contrib/source/Sources.bz2')
@@ -136,6 +147,7 @@ class PublishRepo3Test(BaseTest):
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/contrib/Contents-i386.gz')
         self.check_not_exists('public/dists/maverick/contrib/source/Sources')
         self.check_not_exists('public/dists/maverick/contrib/source/Sources.gz')
         self.check_not_exists('public/dists/maverick/contrib/source/Sources.bz2')
@@ -168,6 +180,7 @@ class PublishRepo4Test(BaseTest):
         self.check_exists('public/ppa/dists/maverick/main/binary-i386/Packages')
         self.check_exists('public/ppa/dists/maverick/main/binary-i386/Packages.gz')
         self.check_exists('public/ppa/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/ppa/dists/maverick/main/Contents-i386.gz')
         self.check_exists('public/ppa/dists/maverick/main/source/Sources')
         self.check_exists('public/ppa/dists/maverick/main/source/Sources.gz')
         self.check_exists('public/ppa/dists/maverick/main/source/Sources.bz2')
@@ -289,6 +302,7 @@ class PublishRepo12Test(BaseTest):
         self.check_exists('public/dists/maverick/main/binary-i386/Packages')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/Contents-i386.gz')
         self.check_exists('public/dists/maverick/main/source/Sources')
         self.check_exists('public/dists/maverick/main/source/Sources.gz')
         self.check_exists('public/dists/maverick/main/source/Sources.bz2')
@@ -330,6 +344,7 @@ class PublishRepo14Test(BaseTest):
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/contrib/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/contrib/Contents-i386.gz')
         self.check_exists('public/dists/maverick/contrib/source/Sources')
         self.check_exists('public/dists/maverick/contrib/source/Sources.gz')
         self.check_exists('public/dists/maverick/contrib/source/Sources.bz2')
@@ -471,7 +486,8 @@ class PublishRepo17Test(BaseTest):
                              'contrib/binary-i386/Packages.bz2',
                              'contrib/source/Sources', 'contrib/source/Sources.gz', 'contrib/source/Sources.bz2',
                              'main/source/Release', 'contrib/source/Release',
-                             'main/binary-i386/Release', 'contrib/binary-i386/Release']):
+                             'main/binary-i386/Release', 'contrib/binary-i386/Release',
+                             'main/Contents-i386.gz']):
             raise Exception("path seen wrong: %r" % (pathsSeen, ))
 
 
@@ -631,6 +647,12 @@ class PublishRepo27Test(BaseTest):
         self.check_exists('public/dists/maverick/main/binary-i386/Packages')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.gz')
         self.check_exists('public/dists/maverick/main/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/Contents-i386.gz')
+        self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Release')
+        self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Packages')
+        self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Packages.gz')
+        self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Packages.bz2')
+        self.check_exists('public/dists/maverick/main/Contents-udeb-i386.gz')
         self.check_exists('public/dists/maverick/main/source/Release')
         self.check_exists('public/dists/maverick/main/source/Sources')
         self.check_exists('public/dists/maverick/main/source/Sources.gz')
@@ -646,3 +668,25 @@ class PublishRepo27Test(BaseTest):
 
         # verify contents except of sums
         self.check_file_contents('public/dists/maverick/main/debian-installer/binary-i386/Packages', 'udeb_binary', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
+
+
+class PublishRepo28Test(BaseTest):
+    """
+    publish repo: -skip-contents
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files} ${udebs}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick -skip-contents local-repo"
+    gold_processor = BaseTest.expand_environ
+
+    def check(self):
+        super(PublishRepo28Test, self).check()
+
+        self.check_exists('public/dists/maverick/Release')
+
+        self.check_exists('public/dists/maverick/main/binary-i386/Release')
+        self.check_not_exists('public/dists/maverick/main/Contents-i386.gz')
+        self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Release')
+        self.check_not_exists('public/dists/maverick/main/Contents-udeb-i386.gz')
