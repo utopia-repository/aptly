@@ -1,3 +1,11 @@
+aptly (0.9.6-1) unstable; urgency=medium
+
+  * Import new upstream version 0.9.6
+  * Add dependency on xz-utils
+  * Licenses and copyrights
+
+ -- Sebastien Delafond <seb@debian.org>  Wed, 10 Feb 2016 18:28:51 +0100
+
 aptly (0.9.5-2) unstable; urgency=medium
 
   * Remove empty component in GOPATH (Closes: #793838)
