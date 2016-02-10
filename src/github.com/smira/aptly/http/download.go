@@ -1,10 +1,10 @@
 package http
 
 import (
-	"code.google.com/p/mxk/go1/flowcontrol"
 	"compress/bzip2"
 	"compress/gzip"
 	"fmt"
+	"github.com/mxk/go-flowrate/flowrate"
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/utils"
 	"github.com/smira/go-ftp-protocol/protocol"
@@ -75,7 +75,7 @@ func NewDownloader(threads int, downLimit int64, progress aptly.Progress) aptly.
 	}
 
 	if downLimit > 0 {
-		downloader.aggWriter = flowcontrol.NewWriter(progress, downLimit)
+		downloader.aggWriter = flowrate.NewWriter(progress, downLimit)
 	} else {
 		downloader.aggWriter = progress
 	}
@@ -145,6 +145,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
 	}
+	req.Close = true
 
 	proxyURL, _ := downloader.client.Transport.(*http.Transport).Proxy(req)
 	if proxyURL == nil && (req.URL.Scheme == "http" || req.URL.Scheme == "https") {
@@ -326,6 +327,10 @@ func DownloadTryCompression(downloader aptly.Downloader, url string, expectedChe
 		}
 
 		if !foundChecksum {
+			if !ignoreMismatch {
+				continue
+			}
+
 			file, err = DownloadTemp(downloader, tryURL)
 		}
 
@@ -343,6 +348,10 @@ func DownloadTryCompression(downloader aptly.Downloader, url string, expectedChe
 		}
 
 		return uncompressed, file, err
+	}
+
+	if err == nil {
+		err = fmt.Errorf("no candidates for %s found", url)
 	}
 	return nil, nil, err
 }

@@ -64,7 +64,7 @@ If you would like to use nightly builds (unstable), please use following reposit
 
 Binary executables (depends almost only on libc) are available for download from `Bintray <http://dl.bintray.com/smira/aptly/>`_.
 
-If you have Go environment set up, you can build aptly from source by running (go 1.3+ required)::
+If you have Go environment set up, you can build aptly from source by running (go 1.4+ required)::
 
     go get -u github.com/mattn/gom
     mkdir -p $GOPATH/src/github.com/smira/aptly
@@ -78,4 +78,29 @@ should work as well, but might fail or produce different result (if external lib
 
 If you don't have Go installed (or older version), you can easily install Go using `gvm <https://github.com/moovweb/gvm/>`_.
 
+Integrations
+------------
 
+Vagrant:
+
+-   `Vagrant configuration <https://github.com/sepulworld/aptly-vagrant>`_ by
+    Zane Williamson, allowing to bring two virtual servers, one with aptly installed
+    and another one set up to install packages from repository published by aptly
+
+Docker:
+
+-    `Docker container <https://github.com/mikepurvis/aptly-docker>`_ with aptly inside by Mike Purvis
+
+With configuration management systems:
+
+-   `Chef cookbook <https://github.com/hw-cookbooks/aptly>`_ by Aaron Baer
+    (Heavy Water Operations, LLC)
+-   `Puppet module <https://github.com/alphagov/puppet-aptly>`_ by
+    Government Digital Services
+-   `SaltStack Formula <https://github.com/saltstack-formulas/aptly-formula>`_ by
+    Forrest Alvarez and Brian Jackson
+-   `Ansible role <https://github.com/aioue/ansible-role-aptly>`_ by Tom Paine
+
+CLI for aptly API:
+
+-   `Ruby aptly CLI/library <https://github.com/sepulworld/aptly_cli>`_ by Zane Williamson

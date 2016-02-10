@@ -2,12 +2,12 @@ package deb
 
 import (
 	"bytes"
-	"code.google.com/p/go-uuid/uuid"
 	"fmt"
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/database"
 	"github.com/smira/aptly/http"
 	"github.com/smira/aptly/utils"
+	"github.com/smira/go-uuid/uuid"
 	"github.com/ugorji/go/codec"
 	"log"
 	"net/url"
@@ -263,7 +263,7 @@ func (repo *RemoteRepo) Fetch(d aptly.Downloader, verifier utils.Verifier) error
 		}
 		defer inrelease.Close()
 
-		err = verifier.VerifyClearsigned(inrelease)
+		_, err = verifier.VerifyClearsigned(inrelease, true)
 		if err != nil {
 			goto splitsignature
 		}
@@ -304,7 +304,7 @@ ok:
 	defer release.Close()
 
 	sreader := NewControlFileReader(release)
-	stanza, err := sreader.ReadStanza()
+	stanza, err := sreader.ReadStanza(true)
 	if err != nil {
 		return err
 	}
@@ -443,7 +443,7 @@ func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.
 		sreader := NewControlFileReader(packagesReader)
 
 		for {
-			stanza, err := sreader.ReadStanza()
+			stanza, err := sreader.ReadStanza(false)
 			if err != nil {
 				return err
 			}

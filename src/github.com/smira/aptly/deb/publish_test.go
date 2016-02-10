@@ -117,14 +117,19 @@ func (s *PublishedRepoSuite) SetUpTest(c *C) {
 	s.packageCollection.Update(s.p3)
 
 	s.repo, _ = NewPublishedRepo("", "ppa", "squeeze", nil, []string{"main"}, []interface{}{s.snapshot}, s.factory)
+	s.repo.SkipContents = true
 
 	s.repo2, _ = NewPublishedRepo("", "ppa", "maverick", nil, []string{"main"}, []interface{}{s.localRepo}, s.factory)
+	s.repo2.SkipContents = true
 
 	s.repo3, _ = NewPublishedRepo("", "linux", "natty", nil, []string{"main", "contrib"}, []interface{}{s.snapshot, s.snapshot2}, s.factory)
+	s.repo3.SkipContents = true
 
 	s.repo4, _ = NewPublishedRepo("", "ppa", "maverick", []string{"source"}, []string{"main"}, []interface{}{s.localRepo}, s.factory)
+	s.repo4.SkipContents = true
 
 	s.repo5, _ = NewPublishedRepo("files:other", "ppa", "maverick", []string{"source"}, []string{"main"}, []interface{}{s.localRepo}, s.factory)
+	s.repo5.SkipContents = true
 
 	poolPath, _ := s.packagePool.Path(s.p1.Files()[0].Filename, s.p1.Files()[0].Checksums.MD5)
 	err := os.MkdirAll(filepath.Dir(poolPath), 0755)
@@ -300,7 +305,7 @@ func (s *PublishedRepoSuite) TestPublish(c *C) {
 	c.Assert(err, IsNil)
 
 	cfr := NewControlFileReader(rf)
-	st, err := cfr.ReadStanza()
+	st, err := cfr.ReadStanza(true)
 	c.Assert(err, IsNil)
 
 	c.Check(st["Origin"], Equals, "ppa squeeze")
@@ -313,13 +318,13 @@ func (s *PublishedRepoSuite) TestPublish(c *C) {
 	cfr = NewControlFileReader(pf)
 
 	for i := 0; i < 3; i++ {
-		st, err = cfr.ReadStanza()
+		st, err = cfr.ReadStanza(false)
 		c.Assert(err, IsNil)
 
 		c.Check(st["Filename"], Equals, "pool/main/a/alien-arena/alien-arena-common_7.40-2_i386.deb")
 	}
 
-	st, err = cfr.ReadStanza()
+	st, err = cfr.ReadStanza(false)
 	c.Assert(err, IsNil)
 	c.Assert(st, IsNil)
 
@@ -327,7 +332,7 @@ func (s *PublishedRepoSuite) TestPublish(c *C) {
 	c.Assert(err, IsNil)
 
 	cfr = NewControlFileReader(drf)
-	st, err = cfr.ReadStanza()
+	st, err = cfr.ReadStanza(true)
 	c.Assert(err, IsNil)
 
 	c.Check(st["Archive"], Equals, "squeeze")

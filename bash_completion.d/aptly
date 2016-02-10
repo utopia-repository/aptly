@@ -64,7 +64,7 @@ _aptly()
     mirror_subcommands="create drop show list rename search update"
     publish_subcommands="drop list repo snapshot switch update"
     snapshot_subcommands="create diff drop filter list merge pull rename search show verify"
-    repo_subcommands="add copy create drop edit import list move remove rename search show"
+    repo_subcommands="add copy create drop edit import include list move remove rename search show"
     package_subcommands="search show"
     task_subcommands="run"
     config_subcommands="show"
@@ -185,7 +185,7 @@ _aptly()
           "search")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-with-deps" -- ${cur}))
+                COMPREPLY=($(compgen -W "-format= -with-deps" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_mirror_list)" -- ${cur}))
               fi
@@ -239,7 +239,7 @@ _aptly()
                 return 0
               ;;
               1)
-                local files=$(find . -mindepth 1 -maxdepth 1  \( -type d -or -name \*.deb -or -name \*.dsc \) -exec basename {} \;)
+                local files=$(find . -mindepth 1 -maxdepth 1  \( -type d -or -name \*.deb -or -name \*.dsc -or -name \*.udeb \) -exec basename {} \;)
                 COMPREPLY=($(compgen -W "${files}" -- ${cur}))
                 return 0
               ;;
@@ -264,7 +264,7 @@ _aptly()
           "create")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-comment= -distribution= -component=" -- ${cur}))
+                COMPREPLY=($(compgen -W "-comment= -distribution= -component= -uploaders-file=" -- ${cur}))
                 return 0
               fi
             fi
@@ -282,7 +282,7 @@ _aptly()
           "edit")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-comment= -distribution= -component=" -- ${cur}))
+                COMPREPLY=($(compgen -W "-comment= -distribution= -component= -uploaders-file=" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_repo_list)" -- ${cur}))
               fi
@@ -292,7 +292,7 @@ _aptly()
           "search")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-with-deps" -- ${cur}))
+                COMPREPLY=($(compgen -W "-format= -with-deps" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_repo_list)" -- ${cur}))
               fi
@@ -304,6 +304,20 @@ _aptly()
                 COMPREPLY=($(compgen -W "-raw" -- ${cur}))
               return 0
             fi
+          ;;
+          "include")
+            case $numargs in
+              0)
+                if [[ "$cur" == -* ]]; then
+                  COMPREPLY=($(compgen -W "-accept-unsigned -force-replace -ignore-signatures -keyring= -no-remove-files -repo= -uploaders-file=" -- ${cur}))
+                else
+                  comptopt -o filenames 2>/dev/null
+                  COMPREPLY=($(compgen -f -- ${cur}))
+                  return 0
+                fi
+                return 0
+              ;;
+            esac
           ;;
           "import")
             case $numargs in
@@ -446,7 +460,7 @@ _aptly()
           "search")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-with-deps" -- ${cur}))
+                COMPREPLY=($(compgen -W "-format= -with-deps" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_snapshot_list)" -- ${cur}))
               fi
@@ -472,7 +486,7 @@ _aptly()
           "snapshot"|"repo")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-batch -force-overwrite -distribution= -component= -gpg-key= -keyring= -label= -origin= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -distribution= -component= -gpg-key= -keyring= -label= -origin= -passphrase= -passphrase-file= -secret-keyring= -skip-contents -skip-signing" -- ${cur}))
               else
                 if [[ "$subcmd" == "snapshot" ]]; then
                   COMPREPLY=($(compgen -W "$(__aptly_snapshot_list)" -- ${cur}))
@@ -497,7 +511,7 @@ _aptly()
           "update")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-batch -force-overwrite -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-contents -skip-signing" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
               fi
@@ -512,7 +526,7 @@ _aptly()
           "switch")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "-batch -force-overwrite -component= -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-signing" -- ${cur}))
+                COMPREPLY=($(compgen -W "-batch -force-overwrite -component= -gpg-key= -keyring= -passphrase= -passphrase-file= -secret-keyring= -skip-contents -skip-signing" -- ${cur}))
               else
                 COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
               fi
@@ -531,7 +545,11 @@ _aptly()
           ;;
           "drop")
             if [[ $numargs -eq 0 ]]; then
-              COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
+              if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-force-drop" -- ${cur}))
+              else
+                COMPREPLY=($(compgen -W "$(__aptly_published_distributions)" -- ${cur}))
+              fi
               return 0
             fi
 
@@ -544,6 +562,14 @@ _aptly()
       ;;
       "package")
         case "$subcmd" in
+          "search")
+            if [[ $numargs -eq 0 ]]; then
+              if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-format=" -- ${cur}))
+              fi
+              return 0
+            fi
+          ;;
           "show")
             if [[ $numargs -eq 0 ]]; then
               if [[ "$cur" == -* ]]; then
@@ -557,6 +583,12 @@ _aptly()
       "serve")
         if [[ "$cur" == -* ]]; then
           COMPREPLY=($(compgen -W "-listen=" -- ${cur}))
+          return 0
+        fi
+      ;;
+      "graph")
+        if [[ "$cur" == -* ]]; then
+          COMPREPLY=($(compgen -W "-format= -output=" -- ${cur}))
           return 0
         fi
       ;;
