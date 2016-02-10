@@ -25,7 +25,7 @@ License: MIT
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/awalterschulze/gographviz/*
 Copyright: 2013 Vastech SA (PTY) LTD
 License: Apache-2
  See: /usr/share/common-licenses/Apache-2.0
@@ -42,20 +42,20 @@ Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/goleveldb/leveld
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: src/github.com/smira/aptly/_vendor/src/golang.org/x/crypto/* src/github.com/smira/aptly/_vendor/src/github.com/smira/flag/* src/github.com/smira/aptly/_vendor/src/code.google.com/p/gographviz/scanner/scanner.go
+Files: src/github.com/smira/aptly/_vendor/src/golang.org/x/crypto/* src/github.com/smira/aptly/_vendor/src/github.com/smira/flag/* src/github.com/smira/aptly/_vendor/src/github.com/awalterschulze/gographviz/scanner/scanner.go
 Copyright: 2009 The Go Authors
 License: BSD-3-clause
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go-uuid/uuid/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/go-uuid/uuid/*
 Copyright: 2009 Google Inc.
 License: BSD-3-clause
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/go-uuid/lib/codereview/codereview.py
+Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/go-uuid/lib/codereview/codereview.py
 Copyright: 2009 Google
 License: Apache-2
  See: /usr/share/common-licenses/Apache-2.0
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/snappy-go/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/golang/snappy/*
 Copyright: 2011 The Snappy-Go Authors
 License: BSD-3-clause
 
@@ -65,6 +65,10 @@ License: MIT
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/commander/*
 Copyright: 2012 The Go-Commander Authors
+License: BSD-3-clause
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/lzma/*
+Copyright: 2010 Andrei Vieru
 License: BSD-3-clause
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/cheggaaa/pb/*
@@ -83,7 +87,7 @@ Files: src/github.com/smira/aptly/_vendor/src/github.com/wsxiaoys/terminal/*
 Copyright: 2013 Meng Zhang
 License: BSD-3-clause
 
-Files: src/github.com/smira/aptly/_vendor/src/code.google.com/p/mxk/go1/*
+Files: src/github.com/smira/aptly/_vendor/src/github.com/mxk/*
 Copyright: 2013 Maxim Khitrov
 License: BSD-3-clause
 
@@ -101,6 +105,10 @@ Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/exp/sdb
 Copyright: 2011 AppsAttic Ltd
 License: LGPL-3
  See: /usr/share/common-licenses/LGPL-3
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/DisposaBoy/JsonConfigReader/*
+Copyright: 2012 The JsonConfigReader Authors
+License: MIT
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/vaughan0/go-ini/*
 Copyright: 2013 Vaughan Newton
@@ -121,10 +129,6 @@ License: BSD-3-clause
 Files: src/github.com/smira/aptly/_vendor/src/github.com/ncw/swift/*
 Copyright: 2012 Nick Craig-Wood
 License: MIT
-
-Files: src/github.com/smira/aptly/_vendor/src/github.com/syndtr/gosnappy/*
-Copyright: 2011 The Snappy-Go Authors
-License: BSD-3-clause
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/AlekSi/pointer/*
 Copyright: 2015 Alexey Palazhchenko
