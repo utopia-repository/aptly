@@ -30,6 +30,7 @@ var (
 		"MD5Sum",
 		"SHA1",
 		"SHA256",
+		"SHA512",
 	}
 
 	canonicalOrderBinary = []string{
@@ -59,6 +60,7 @@ var (
 		"MD5sum",
 		"SHA1",
 		"SHA256",
+		"SHA512",
 		"Description",
 	}
 
@@ -104,6 +106,8 @@ func isMultilineField(field string, isRelease bool) bool {
 		return true
 	case "Checksums-Sha256":
 		return true
+	case "Checksums-Sha512":
+		return true
 	case "Package-List":
 		return true
 	case "MD5Sum":
@@ -111,6 +115,8 @@ func isMultilineField(field string, isRelease bool) bool {
 	case "SHA1":
 		return isRelease
 	case "SHA256":
+		return isRelease
+	case "SHA512":
 		return isRelease
 	}
 	return false

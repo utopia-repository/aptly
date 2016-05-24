@@ -30,9 +30,11 @@ import (
 var (
 	dbPath                 = path.Join(os.TempDir(), "goleveldb-testdb")
 	openFilesCacheCapacity = 500
-	dataLen                = 63
+	keyLen                 = 63
+	valueLen               = 256
 	numKeys                = arrayInt{100000, 1332, 531, 1234, 9553, 1024, 35743}
 	httpProf               = "127.0.0.1:5454"
+	transactionProb        = 0.5
 	enableBlockCache       = false
 	enableCompression      = false
 	enableBufferPool       = false
@@ -75,32 +77,42 @@ func (a *arrayInt) Set(str string) error {
 func init() {
 	flag.StringVar(&dbPath, "db", dbPath, "testdb path")
 	flag.IntVar(&openFilesCacheCapacity, "openfilescachecap", openFilesCacheCapacity, "open files cache capacity")
-	flag.IntVar(&dataLen, "datalen", dataLen, "data length")
+	flag.IntVar(&keyLen, "keylen", keyLen, "key length")
+	flag.IntVar(&valueLen, "valuelen", valueLen, "value length")
 	flag.Var(&numKeys, "numkeys", "num keys")
 	flag.StringVar(&httpProf, "httpprof", httpProf, "http pprof listen addr")
+	flag.Float64Var(&transactionProb, "transactionprob", transactionProb, "probablity of writes using transaction")
 	flag.BoolVar(&enableBufferPool, "enablebufferpool", enableBufferPool, "enable buffer pool")
 	flag.BoolVar(&enableBlockCache, "enableblockcache", enableBlockCache, "enable block cache")
 	flag.BoolVar(&enableCompression, "enablecompression", enableCompression, "enable block compression")
 }
 
-func randomData(dst []byte, ns, prefix byte, i uint32) []byte {
-	n := 2 + dataLen + 4 + 4
-	n2 := n*2 + 4
-	if cap(dst) < n2 {
-		dst = make([]byte, n2)
-	} else {
-		dst = dst[:n2]
+func randomData(dst []byte, ns, prefix byte, i uint32, dataLen int) []byte {
+	if dataLen < (2+4+4)*2+4 {
+		panic("dataLen is too small")
 	}
-	_, err := rand.Reader.Read(dst[2 : n-8])
-	if err != nil {
+	if cap(dst) < dataLen {
+		dst = make([]byte, dataLen)
+	} else {
+		dst = dst[:dataLen]
+	}
+	half := (dataLen - 4) / 2
+	if _, err := rand.Reader.Read(dst[2 : half-8]); err != nil {
 		panic(err)
 	}
 	dst[0] = ns
 	dst[1] = prefix
-	binary.LittleEndian.PutUint32(dst[n-8:], i)
-	binary.LittleEndian.PutUint32(dst[n-4:], util.NewCRC(dst[:n-4]).Value())
-	copy(dst[n:n+n], dst[:n])
-	binary.LittleEndian.PutUint32(dst[n2-4:], util.NewCRC(dst[:n2-4]).Value())
+	binary.LittleEndian.PutUint32(dst[half-8:], i)
+	binary.LittleEndian.PutUint32(dst[half-8:], i)
+	binary.LittleEndian.PutUint32(dst[half-4:], util.NewCRC(dst[:half-4]).Value())
+	full := half * 2
+	copy(dst[half:full], dst[:half])
+	if full < dataLen-4 {
+		if _, err := rand.Reader.Read(dst[full : dataLen-4]); err != nil {
+			panic(err)
+		}
+	}
+	binary.LittleEndian.PutUint32(dst[dataLen-4:], util.NewCRC(dst[:dataLen-4]).Value())
 	return dst
 }
 
@@ -118,7 +130,7 @@ func dataPrefix(data []byte) byte {
 }
 
 func dataI(data []byte) uint32 {
-	return binary.LittleEndian.Uint32(data[len(data)-12:])
+	return binary.LittleEndian.Uint32(data[(len(data)-4)/2-8:])
 }
 
 func dataChecksum(data []byte) (uint32, uint32) {
@@ -135,52 +147,101 @@ func dataNsSlice(ns byte) *util.Range {
 	return util.BytesPrefix([]byte{ns})
 }
 
-type testingFile struct {
-	storage.File
-}
-
-func (tf *testingFile) Remove() error {
-	if atomic.LoadUint32(&fail) == 1 {
-		return nil
-	}
-
-	if tf.Type() == storage.TypeTable {
-		if scanTable(tf, true) {
-			return nil
-		}
-	}
-	return tf.File.Remove()
-}
-
 type testingStorage struct {
 	storage.Storage
 }
 
-func (ts *testingStorage) GetFile(num uint64, t storage.FileType) storage.File {
-	return &testingFile{ts.Storage.GetFile(num, t)}
-}
-
-func (ts *testingStorage) GetFiles(t storage.FileType) ([]storage.File, error) {
-	files, err := ts.Storage.GetFiles(t)
+func (ts *testingStorage) scanTable(fd storage.FileDesc, checksum bool) (corrupted bool) {
+	r, err := ts.Open(fd)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
-	for i := range files {
-		files[i] = &testingFile{files[i]}
+	defer r.Close()
+
+	size, err := r.Seek(0, os.SEEK_END)
+	if err != nil {
+		log.Fatal(err)
 	}
-	return files, nil
+
+	o := &opt.Options{
+		DisableLargeBatchTransaction: true,
+		Strict: opt.NoStrict,
+	}
+	if checksum {
+		o.Strict = opt.StrictBlockChecksum | opt.StrictReader
+	}
+	tr, err := table.NewReader(r, size, fd, nil, bpool, o)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tr.Release()
+
+	checkData := func(i int, t string, data []byte) bool {
+		if len(data) == 0 {
+			panic(fmt.Sprintf("[%v] nil data: i=%d t=%s", fd, i, t))
+		}
+
+		checksum0, checksum1 := dataChecksum(data)
+		if checksum0 != checksum1 {
+			atomic.StoreUint32(&fail, 1)
+			atomic.StoreUint32(&done, 1)
+			corrupted = true
+
+			data0, data1 := dataSplit(data)
+			data0c0, data0c1 := dataChecksum(data0)
+			data1c0, data1c1 := dataChecksum(data1)
+			log.Printf("FATAL: [%v] Corrupted data i=%d t=%s (%#x != %#x): %x(%v) vs %x(%v)",
+				fd, i, t, checksum0, checksum1, data0, data0c0 == data0c1, data1, data1c0 == data1c1)
+			return true
+		}
+		return false
+	}
+
+	iter := tr.NewIterator(nil, nil)
+	defer iter.Release()
+	for i := 0; iter.Next(); i++ {
+		ukey, _, kt, kerr := parseIkey(iter.Key())
+		if kerr != nil {
+			atomic.StoreUint32(&fail, 1)
+			atomic.StoreUint32(&done, 1)
+			corrupted = true
+
+			log.Printf("FATAL: [%v] Corrupted ikey i=%d: %v", fd, i, kerr)
+			return
+		}
+		if checkData(i, "key", ukey) {
+			return
+		}
+		if kt == ktVal && checkData(i, "value", iter.Value()) {
+			return
+		}
+	}
+	if err := iter.Error(); err != nil {
+		if errors.IsCorrupted(err) {
+			atomic.StoreUint32(&fail, 1)
+			atomic.StoreUint32(&done, 1)
+			corrupted = true
+
+			log.Printf("FATAL: [%v] Corruption detected: %v", fd, err)
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	return
 }
 
-func (ts *testingStorage) GetManifest() (storage.File, error) {
-	f, err := ts.Storage.GetManifest()
-	if err == nil {
-		f = &testingFile{f}
+func (ts *testingStorage) Remove(fd storage.FileDesc) error {
+	if atomic.LoadUint32(&fail) == 1 {
+		return nil
 	}
-	return f, err
-}
 
-func (ts *testingStorage) SetManifest(f storage.File) error {
-	return ts.Storage.SetManifest(f.(*testingFile).File)
+	if fd.Type == storage.TypeTable {
+		if ts.scanTable(fd, true) {
+			return nil
+		}
+	}
+	return ts.Storage.Remove(fd)
 }
 
 type latencyStats struct {
@@ -236,84 +297,6 @@ func (s *latencyStats) add(x *latencyStats) {
 	s.num += x.num
 }
 
-func scanTable(f storage.File, checksum bool) (corrupted bool) {
-	fi := storage.NewFileInfo(f)
-	r, err := f.Open()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer r.Close()
-
-	size, err := r.Seek(0, os.SEEK_END)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	o := &opt.Options{Strict: opt.NoStrict}
-	if checksum {
-		o.Strict = opt.StrictBlockChecksum | opt.StrictReader
-	}
-	tr, err := table.NewReader(r, size, fi, nil, bpool, o)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer tr.Release()
-
-	checkData := func(i int, t string, data []byte) bool {
-		if len(data) == 0 {
-			panic(fmt.Sprintf("[%v] nil data: i=%d t=%s", fi, i, t))
-		}
-
-		checksum0, checksum1 := dataChecksum(data)
-		if checksum0 != checksum1 {
-			atomic.StoreUint32(&fail, 1)
-			atomic.StoreUint32(&done, 1)
-			corrupted = true
-
-			data0, data1 := dataSplit(data)
-			data0c0, data0c1 := dataChecksum(data0)
-			data1c0, data1c1 := dataChecksum(data1)
-			log.Printf("FATAL: [%v] Corrupted data i=%d t=%s (%#x != %#x): %x(%v) vs %x(%v)",
-				fi, i, t, checksum0, checksum1, data0, data0c0 == data0c1, data1, data1c0 == data1c1)
-			return true
-		}
-		return false
-	}
-
-	iter := tr.NewIterator(nil, nil)
-	defer iter.Release()
-	for i := 0; iter.Next(); i++ {
-		ukey, _, kt, kerr := parseIkey(iter.Key())
-		if kerr != nil {
-			atomic.StoreUint32(&fail, 1)
-			atomic.StoreUint32(&done, 1)
-			corrupted = true
-
-			log.Printf("FATAL: [%v] Corrupted ikey i=%d: %v", fi, i, kerr)
-			return
-		}
-		if checkData(i, "key", ukey) {
-			return
-		}
-		if kt == ktVal && checkData(i, "value", iter.Value()) {
-			return
-		}
-	}
-	if err := iter.Error(); err != nil {
-		if errors.IsCorrupted(err) {
-			atomic.StoreUint32(&fail, 1)
-			atomic.StoreUint32(&done, 1)
-			corrupted = true
-
-			log.Printf("FATAL: [%v] Corruption detected: %v", fi, err)
-		} else {
-			log.Fatal(err)
-		}
-	}
-
-	return
-}
-
 func main() {
 	flag.Parse()
 
@@ -335,12 +318,12 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	os.RemoveAll(dbPath)
-	stor, err := storage.OpenFile(dbPath)
+	stor, err := storage.OpenFile(dbPath, false)
 	if err != nil {
 		log.Fatal(err)
 	}
-	stor = &testingStorage{stor}
-	defer stor.Close()
+	tstor := &testingStorage{stor}
+	defer tstor.Close()
 
 	fatalf := func(err error, format string, v ...interface{}) {
 		atomic.StoreUint32(&fail, 1)
@@ -348,10 +331,10 @@ func main() {
 		log.Printf("FATAL: "+format, v...)
 		if err != nil && errors.IsCorrupted(err) {
 			cerr := err.(*errors.ErrCorrupted)
-			if cerr.File != nil && cerr.File.Type == storage.TypeTable {
+			if !cerr.Fd.Nil() && cerr.Fd.Type == storage.TypeTable {
 				log.Print("FATAL: corruption detected, scanning...")
-				if !scanTable(stor.GetFile(cerr.File.Num, cerr.File.Type), false) {
-					log.Printf("FATAL: unable to find corrupted key/value pair in table %v", cerr.File)
+				if !tstor.scanTable(storage.FileDesc{Type: storage.TypeTable, Num: cerr.Fd.Num}, false) {
+					log.Printf("FATAL: unable to find corrupted key/value pair in table %v", cerr.Fd)
 				}
 			}
 		}
@@ -372,18 +355,19 @@ func main() {
 		o.Compression = opt.DefaultCompression
 	}
 
-	db, err := leveldb.Open(stor, o)
+	db, err := leveldb.Open(tstor, o)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
 	var (
-		mu         = &sync.Mutex{}
-		gGetStat   = &latencyStats{}
-		gIterStat  = &latencyStats{}
-		gWriteStat = &latencyStats{}
-		startTime  = time.Now()
+		mu              = &sync.Mutex{}
+		gGetStat        = &latencyStats{}
+		gIterStat       = &latencyStats{}
+		gWriteStat      = &latencyStats{}
+		gTrasactionStat = &latencyStats{}
+		startTime       = time.Now()
 
 		writeReq    = make(chan *leveldb.Batch)
 		writeAck    = make(chan error)
@@ -392,10 +376,26 @@ func main() {
 
 	go func() {
 		for b := range writeReq {
-			gWriteStat.start()
-			err := db.Write(b, nil)
-			if err == nil {
-				gWriteStat.record(b.Len())
+
+			var err error
+			if mrand.Float64() < transactionProb {
+				log.Print("> Write using transaction")
+				gTrasactionStat.start()
+				var tr *leveldb.Transaction
+				if tr, err = db.OpenTransaction(); err == nil {
+					if err = tr.Write(b, nil); err == nil {
+						if err = tr.Commit(); err == nil {
+							gTrasactionStat.record(b.Len())
+						}
+					} else {
+						tr.Discard()
+					}
+				}
+			} else {
+				gWriteStat.start()
+				if err = db.Write(b, nil); err == nil {
+					gWriteStat.record(b.Len())
+				}
 			}
 			writeAck <- err
 			<-writeAckAck
@@ -416,6 +416,8 @@ func main() {
 				gIterStat.min, gIterStat.max, gIterStat.avg(), gIterStat.ratePerSec())
 			log.Printf("> WriteLatencyMin=%v WriteLatencyMax=%v WriteLatencyAvg=%v WriteRatePerSec=%d",
 				gWriteStat.min, gWriteStat.max, gWriteStat.avg(), gWriteStat.ratePerSec())
+			log.Printf("> TransactionLatencyMin=%v TransactionLatencyMax=%v TransactionLatencyAvg=%v TransactionRatePerSec=%d",
+				gTrasactionStat.min, gTrasactionStat.max, gTrasactionStat.avg(), gTrasactionStat.ratePerSec())
 			mu.Unlock()
 
 			cachedblock, _ := db.GetProperty("leveldb.cachedblock")
@@ -436,7 +438,7 @@ func main() {
 
 			keys := make([][]byte, numKey)
 			for i := range keys {
-				keys[i] = randomData(nil, byte(ns), 1, uint32(i))
+				keys[i] = randomData(nil, byte(ns), 1, uint32(i), keyLen)
 			}
 
 			wg.Add(1)
@@ -457,8 +459,8 @@ func main() {
 
 					b.Reset()
 					for _, k1 := range keys {
-						k2 = randomData(k2, byte(ns), 2, wi)
-						v2 = randomData(v2, byte(ns), 3, wi)
+						k2 = randomData(k2, byte(ns), 2, wi, keyLen)
+						v2 = randomData(v2, byte(ns), 3, wi, valueLen)
 						b.Put(k2, v2)
 						b.Put(k1, k2)
 					}
@@ -516,11 +518,16 @@ func main() {
 								}
 
 								getStat.start()
-								_, err := snap.Get(k2, nil)
+								v2, err := snap.Get(k2, nil)
 								if err != nil {
 									fatalf(err, "[%02d] READER #%d.%d K%d snap.Get: %v\nk1: %x\n -> k2: %x", ns, snapwi, ri, n, err, k1, k2)
 								}
 								getStat.record(1)
+
+								if checksum0, checksum1 := dataChecksum(v2); checksum0 != checksum1 {
+									err := &errors.ErrCorrupted{Fd: storage.FileDesc{0xff, 0}, Err: fmt.Errorf("v2: %x: checksum mismatch: %v vs %v", v2, checksum0, checksum1)}
+									fatalf(err, "[%02d] READER #%d.%d K%d snap.Get: %v\nk1: %x\n -> k2: %x", ns, snapwi, ri, n, err, k1, k2)
+								}
 
 								n++
 								iterStat.start()

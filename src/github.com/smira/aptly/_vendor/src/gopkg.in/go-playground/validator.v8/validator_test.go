@@ -4977,6 +4977,7 @@ func TestUrl(t *testing.T) {
 		{"rtmp://foobar.com", true},
 		{"http://www.foo_bar.com/", true},
 		{"http://localhost:3000/", true},
+		{"http://foobar.com/#baz", true},
 		{"http://foobar.com#baz=qux", true},
 		{"http://foobar.com/t$-_.+!*\\'(),", true},
 		{"http://www.foobar.com/~foobar", true},
@@ -5278,6 +5279,26 @@ func TestEmail(t *testing.T) {
 
 	s := "test@mail.com"
 	errs := validate.Field(s, "email")
+	Equal(t, errs, nil)
+
+	s = "Dörte@Sörensen.example.com"
+	errs = validate.Field(s, "email")
+	Equal(t, errs, nil)
+
+	s = "θσερ@εχαμπλε.ψομ"
+	errs = validate.Field(s, "email")
+	Equal(t, errs, nil)
+
+	s = "юзер@екзампл.ком"
+	errs = validate.Field(s, "email")
+	Equal(t, errs, nil)
+
+	s = "उपयोगकर्ता@उदाहरण.कॉम"
+	errs = validate.Field(s, "email")
+	Equal(t, errs, nil)
+
+	s = "用户@例子.广告"
+	errs = validate.Field(s, "email")
 	Equal(t, errs, nil)
 
 	s = ""

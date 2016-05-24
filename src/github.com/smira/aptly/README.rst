@@ -48,7 +48,7 @@ To install aptly on Debian/Ubuntu, add new repository to /etc/apt/sources.list::
 
 And import key that is used to sign the release::
 
-    $ apt-key adv --keyserver keys.gnupg.net --recv-keys E083A3782A194991
+    $ apt-key adv --keyserver keys.gnupg.net --recv-keys 9E3E53F19C7DE460
 
 After that you can install aptly as any other software package::
 
@@ -90,6 +90,7 @@ Vagrant:
 Docker:
 
 -    `Docker container <https://github.com/mikepurvis/aptly-docker>`_ with aptly inside by Mike Purvis
+-    `Docker container <https://github.com/bryanhong/docker-aptly>`_ with aptly and nginx by Bryan Hong
 
 With configuration management systems:
 
@@ -104,3 +105,7 @@ With configuration management systems:
 CLI for aptly API:
 
 -   `Ruby aptly CLI/library <https://github.com/sepulworld/aptly_cli>`_ by Zane Williamson
+
+Scala sbt:
+
+-   `sbt aptly plugin <https://github.com/amalakar/sbt-aptly>`_ by Arup Malakar

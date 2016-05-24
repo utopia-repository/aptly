@@ -188,7 +188,7 @@ func (st *serverTester) loopNum() int {
 
 // awaitIdle heuristically awaits for the server conn's select loop to be idle.
 // The heuristic is that the server connection's serve loop must schedule
-// 50 times in a row without any channel sends or receives occuring.
+// 50 times in a row without any channel sends or receives occurring.
 func (st *serverTester) awaitIdle() {
 	remain := 50
 	last := st.loopNum()
@@ -204,6 +204,13 @@ func (st *serverTester) awaitIdle() {
 }
 
 func (st *serverTester) Close() {
+	if st.t.Failed() {
+		// If we failed already (and are likely in a Fatal,
+		// unwindowing), force close the connection, so the
+		// httptest.Server doesn't wait forever for the conn
+		// to close.
+		st.cc.Close()
+	}
 	st.ts.Close()
 	if st.cc != nil {
 		st.cc.Close()
@@ -2515,7 +2522,7 @@ func TestCompressionErrorOnWrite(t *testing.T) {
 	defer st.Close()
 	st.greet()
 
-	maxAllowed := st.sc.maxHeaderStringLen()
+	maxAllowed := st.sc.framer.maxHeaderStringLen()
 
 	// Crank this up, now that we have a conn connected with the
 	// hpack.Decoder's max string length set has been initialized
@@ -2524,8 +2531,12 @@ func TestCompressionErrorOnWrite(t *testing.T) {
 	// the max string size.
 	serverConfig.MaxHeaderBytes = 1 << 20
 
-	// First a request with a header that's exactly the max allowed size.
+	// First a request with a header that's exactly the max allowed size
+	// for the hpack compression. It's still too long for the header list
+	// size, so we'll get the 431 error, but that keeps the compression
+	// context still valid.
 	hbf := st.encodeHeader("foo", strings.Repeat("a", maxAllowed))
+
 	st.writeHeaders(HeadersFrameParam{
 		StreamID:      1,
 		BlockFragment: hbf,
@@ -2533,8 +2544,24 @@ func TestCompressionErrorOnWrite(t *testing.T) {
 		EndHeaders:    true,
 	})
 	h := st.wantHeaders()
-	if !h.HeadersEnded() || !h.StreamEnded() {
-		t.Errorf("Unexpected HEADER frame %v", h)
+	if !h.HeadersEnded() {
+		t.Fatalf("Got HEADERS without END_HEADERS set: %v", h)
+	}
+	headers := st.decodeHeader(h.HeaderBlockFragment())
+	want := [][2]string{
+		{":status", "431"},
+		{"content-type", "text/html; charset=utf-8"},
+		{"content-length", "63"},
+	}
+	if !reflect.DeepEqual(headers, want) {
+		t.Errorf("Headers mismatch.\n got: %q\nwant: %q\n", headers, want)
+	}
+	df := st.wantData()
+	if !strings.Contains(string(df.Data()), "HTTP Error 431") {
+		t.Errorf("Unexpected data body: %q", df.Data())
+	}
+	if !df.StreamEnded() {
+		t.Fatalf("expect data stream end")
 	}
 
 	// And now send one that's just one byte too big.
@@ -2739,6 +2766,7 @@ func TestServerDoesntWriteInvalidHeaders(t *testing.T) {
 }
 
 func BenchmarkServerGets(b *testing.B) {
+	defer disableGoroutineTracking()()
 	b.ReportAllocs()
 
 	const msg = "Hello, world"
@@ -2770,6 +2798,7 @@ func BenchmarkServerGets(b *testing.B) {
 }
 
 func BenchmarkServerPosts(b *testing.B) {
+	defer disableGoroutineTracking()()
 	b.ReportAllocs()
 
 	const msg = "Hello, world"
@@ -2982,6 +3011,76 @@ func TestServerNoDuplicateContentType(t *testing.T) {
 	}
 }
 
+func disableGoroutineTracking() (restore func()) {
+	old := DebugGoroutines
+	DebugGoroutines = false
+	return func() { DebugGoroutines = old }
+}
+
+func BenchmarkServer_GetRequest(b *testing.B) {
+	defer disableGoroutineTracking()()
+	b.ReportAllocs()
+	const msg = "Hello, world."
+	st := newServerTester(b, func(w http.ResponseWriter, r *http.Request) {
+		n, err := io.Copy(ioutil.Discard, r.Body)
+		if err != nil || n > 0 {
+			b.Error("Read %d bytes, error %v; want 0 bytes.", n, err)
+		}
+		io.WriteString(w, msg)
+	})
+	defer st.Close()
+
+	st.greet()
+	// Give the server quota to reply. (plus it has the the 64KB)
+	if err := st.fr.WriteWindowUpdate(0, uint32(b.N*len(msg))); err != nil {
+		b.Fatal(err)
+	}
+	hbf := st.encodeHeader(":method", "GET")
+	for i := 0; i < b.N; i++ {
+		streamID := uint32(1 + 2*i)
+		st.writeHeaders(HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: hbf,
+			EndStream:     true,
+			EndHeaders:    true,
+		})
+		st.wantHeaders()
+		st.wantData()
+	}
+}
+
+func BenchmarkServer_PostRequest(b *testing.B) {
+	defer disableGoroutineTracking()()
+	b.ReportAllocs()
+	const msg = "Hello, world."
+	st := newServerTester(b, func(w http.ResponseWriter, r *http.Request) {
+		n, err := io.Copy(ioutil.Discard, r.Body)
+		if err != nil || n > 0 {
+			b.Error("Read %d bytes, error %v; want 0 bytes.", n, err)
+		}
+		io.WriteString(w, msg)
+	})
+	defer st.Close()
+	st.greet()
+	// Give the server quota to reply. (plus it has the the 64KB)
+	if err := st.fr.WriteWindowUpdate(0, uint32(b.N*len(msg))); err != nil {
+		b.Fatal(err)
+	}
+	hbf := st.encodeHeader(":method", "POST")
+	for i := 0; i < b.N; i++ {
+		streamID := uint32(1 + 2*i)
+		st.writeHeaders(HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: hbf,
+			EndStream:     false,
+			EndHeaders:    true,
+		})
+		st.writeData(streamID, true, nil)
+		st.wantHeaders()
+		st.wantData()
+	}
+}
+
 type connStateConn struct {
 	net.Conn
 	cs tls.ConnectionState
@@ -3057,6 +3156,27 @@ func TestServerHandleCustomConn(t *testing.T) {
 	}
 }
 
+// golang.org/issue/14214
+func TestServer_Rejects_ConnHeaders(t *testing.T) {
+	testServerResponse(t, func(w http.ResponseWriter, r *http.Request) error {
+		t.Errorf("should not get to Handler")
+		return nil
+	}, func(st *serverTester) {
+		st.bodylessReq1("connection", "foo")
+		hf := st.wantHeaders()
+		goth := st.decodeHeader(hf.HeaderBlockFragment())
+		wanth := [][2]string{
+			{":status", "400"},
+			{"content-type", "text/plain; charset=utf-8"},
+			{"x-content-type-options", "nosniff"},
+			{"content-length", "51"},
+		}
+		if !reflect.DeepEqual(goth, wanth) {
+			t.Errorf("Got headers %v; want %v", goth, wanth)
+		}
+	})
+}
+
 type hpackEncoder struct {
 	enc *hpack.Encoder
 	buf bytes.Buffer
@@ -3079,4 +3199,46 @@ func (he *hpackEncoder) encodeHeaderRaw(t *testing.T, headers ...string) []byte 
 		headers = headers[2:]
 	}
 	return he.buf.Bytes()
+}
+
+func TestCheckValidHTTP2Request(t *testing.T) {
+	tests := []struct {
+		req  *http.Request
+		want error
+	}{
+		{
+			req:  &http.Request{Header: http.Header{"Te": {"trailers"}}},
+			want: nil,
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Te": {"trailers", "bogus"}}},
+			want: errors.New(`request header "TE" may only be "trailers" in HTTP/2`),
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Foo": {""}}},
+			want: nil,
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Connection": {""}}},
+			want: errors.New(`request header "Connection" is not valid in HTTP/2`),
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Proxy-Connection": {""}}},
+			want: errors.New(`request header "Proxy-Connection" is not valid in HTTP/2`),
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Keep-Alive": {""}}},
+			want: errors.New(`request header "Keep-Alive" is not valid in HTTP/2`),
+		},
+		{
+			req:  &http.Request{Header: http.Header{"Upgrade": {""}}},
+			want: errors.New(`request header "Upgrade" is not valid in HTTP/2`),
+		},
+	}
+	for i, tt := range tests {
+		got := checkValidHTTP2Request(tt.req)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%d. checkValidHTTP2Request = %v; want %v", i, got, tt.want)
+		}
+	}
 }
