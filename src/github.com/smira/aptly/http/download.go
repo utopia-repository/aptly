@@ -167,7 +167,7 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 		return
 	}
 
-	err = os.MkdirAll(filepath.Dir(task.destination), 0755)
+	err = os.MkdirAll(filepath.Dir(task.destination), 0777)
 	if err != nil {
 		task.result <- fmt.Errorf("%s: %s", task.url, err)
 		return
@@ -209,6 +209,8 @@ func (downloader *downloaderImpl) handleTask(task *downloadTask) {
 			err = fmt.Errorf("%s: sha1 hash mismatch %#v != %#v", task.url, actual.SHA1, task.expected.SHA1)
 		} else if task.expected.SHA256 != "" && actual.SHA256 != task.expected.SHA256 {
 			err = fmt.Errorf("%s: sha256 hash mismatch %#v != %#v", task.url, actual.SHA256, task.expected.SHA256)
+		} else if task.expected.SHA512 != "" && actual.SHA512 != task.expected.SHA512 {
+			err = fmt.Errorf("%s: sha512 hash mismatch %#v != %#v", task.url, actual.SHA512, task.expected.SHA512)
 		}
 
 		if err != nil {

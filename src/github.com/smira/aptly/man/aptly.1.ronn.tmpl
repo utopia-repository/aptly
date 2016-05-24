@@ -40,6 +40,7 @@ Configuration file is stored in JSON format (default values shown below):
       "downloadSourcePackages": false,
       "ppaDistributorID": "ubuntu",
       "ppaCodename": "",
+      "skipContentsPublishing": false,
       "S3PublishEndpoints": {
         "test": {
           "region": "us-east-1",
@@ -52,7 +53,9 @@ Configuration file is stored in JSON format (default values shown below):
           "storageClass": "",
           "encryptionMethod": "",
           "plusWorkaround": false,
-          "disableMultiDel": false
+          "disableMultiDel": false,
+          "forceSigV2": false,
+          "debug": false
         }
       },
       "SwiftPublishEndpoints": {

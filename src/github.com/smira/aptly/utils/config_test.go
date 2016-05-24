@@ -62,6 +62,7 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 		"  \"downloadSourcePackages\": false,\n"+
 		"  \"ppaDistributorID\": \"\",\n"+
 		"  \"ppaCodename\": \"\",\n"+
+		"  \"skipContentsPublishing\": false,\n"+
 		"  \"S3PublishEndpoints\": {\n"+
 		"    \"test\": {\n"+
 		"      \"region\": \"us-east-1\",\n"+
@@ -69,12 +70,15 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 		"      \"endpoint\": \"\",\n"+
 		"      \"awsAccessKeyID\": \"\",\n"+
 		"      \"awsSecretAccessKey\": \"\",\n"+
+		"      \"awsSessionToken\": \"\",\n"+
 		"      \"prefix\": \"\",\n"+
 		"      \"acl\": \"\",\n"+
 		"      \"storageClass\": \"\",\n"+
 		"      \"encryptionMethod\": \"\",\n"+
 		"      \"plusWorkaround\": false,\n"+
-		"      \"disableMultiDel\": false\n"+
+		"      \"disableMultiDel\": false,\n"+
+		"      \"forceSigV2\": false,\n"+
+		"      \"debug\": false\n"+
 		"    }\n"+
 		"  },\n"+
 		"  \"SwiftPublishEndpoints\": {\n"+

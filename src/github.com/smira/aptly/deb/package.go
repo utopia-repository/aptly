@@ -76,6 +76,7 @@ func NewPackageFromControlFile(input Stanza) *Package {
 			MD5:    strings.TrimSpace(md5),
 			SHA1:   strings.TrimSpace(input["SHA1"]),
 			SHA256: strings.TrimSpace(input["SHA256"]),
+			SHA512: strings.TrimSpace(input["SHA512"]),
 		},
 	}})
 
@@ -84,6 +85,7 @@ func NewPackageFromControlFile(input Stanza) *Package {
 	delete(input, "MD5Sum")
 	delete(input, "SHA1")
 	delete(input, "SHA256")
+	delete(input, "SHA512")
 	delete(input, "Size")
 
 	depends := &PackageDependencies{}
@@ -405,15 +407,7 @@ func (p *Package) Contents(packagePool aptly.PackagePool) []string {
 		return nil
 	}
 
-	if p.contents == nil {
-		if p.collection == nil {
-			panic("contents == nil && collection == nil")
-		}
-
-		p.contents = p.collection.loadContents(p, packagePool)
-	}
-
-	return p.contents
+	return p.collection.loadContents(p, packagePool)
 }
 
 // CalculateContents looks up contents in package file
@@ -458,7 +452,7 @@ func (p *Package) Stanza() (result Stanza) {
 	}
 
 	if p.IsSource {
-		md5, sha1, sha256 := make([]string, 0), make([]string, 0), make([]string, 0)
+		md5, sha1, sha256, sha512 := []string{}, []string{}, []string{}, []string{}
 
 		for _, f := range p.Files() {
 			if f.Checksums.MD5 != "" {
@@ -470,11 +464,21 @@ func (p *Package) Stanza() (result Stanza) {
 			if f.Checksums.SHA256 != "" {
 				sha256 = append(sha256, fmt.Sprintf(" %s %d %s\n", f.Checksums.SHA256, f.Checksums.Size, f.Filename))
 			}
+			if f.Checksums.SHA512 != "" {
+				sha512 = append(sha512, fmt.Sprintf(" %s %d %s\n", f.Checksums.SHA512, f.Checksums.Size, f.Filename))
+			}
 		}
 
 		result["Files"] = strings.Join(md5, "")
-		result["Checksums-Sha1"] = strings.Join(sha1, "")
-		result["Checksums-Sha256"] = strings.Join(sha256, "")
+		if len(sha1) > 0 {
+			result["Checksums-Sha1"] = strings.Join(sha1, "")
+		}
+		if len(sha256) > 0 {
+			result["Checksums-Sha256"] = strings.Join(sha256, "")
+		}
+		if len(sha512) > 0 {
+			result["Checksums-Sha512"] = strings.Join(sha512, "")
+		}
 	} else {
 		f := p.Files()[0]
 		result["Filename"] = f.DownloadURL()
@@ -486,6 +490,9 @@ func (p *Package) Stanza() (result Stanza) {
 		}
 		if f.Checksums.SHA256 != "" {
 			result["SHA256"] = f.Checksums.SHA256
+		}
+		if f.Checksums.SHA512 != "" {
+			result["SHA512"] = f.Checksums.SHA512
 		}
 		result["Size"] = fmt.Sprintf("%d", f.Checksums.Size)
 	}

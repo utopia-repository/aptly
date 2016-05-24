@@ -290,10 +290,11 @@ func (p *PublishedRepo) MarshalJSON() ([]byte, error) {
 		"SourceKind":    p.SourceKind,
 		"Sources":       sources,
 		"Storage":       p.Storage,
+		"SkipContents":  p.SkipContents,
 	})
 }
 
-// String returns human-readable represenation of PublishedRepo
+// String returns human-readable representation of PublishedRepo
 func (p *PublishedRepo) String() string {
 	var sources = []string{}
 
@@ -640,6 +641,9 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 
 				var bufWriter *bufio.Writer
 				bufWriter, err = indexes.ReleaseIndex(component, arch, udeb).BufWriter()
+				if err != nil {
+					return fmt.Errorf("unable to get ReleaseIndex writer: %s", err)
+				}
 
 				err = release.WriteTo(bufWriter, false, true)
 				if err != nil {
@@ -669,6 +673,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 	release["MD5Sum"] = ""
 	release["SHA1"] = ""
 	release["SHA256"] = ""
+	release["SHA512"] = ""
 
 	release["Components"] = strings.Join(p.Components(), " ")
 
@@ -676,6 +681,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 		release["MD5Sum"] += fmt.Sprintf(" %s %8d %s\n", info.MD5, info.Size, path)
 		release["SHA1"] += fmt.Sprintf(" %s %8d %s\n", info.SHA1, info.Size, path)
 		release["SHA256"] += fmt.Sprintf(" %s %8d %s\n", info.SHA256, info.Size, path)
+		release["SHA512"] += fmt.Sprintf(" %s %8d %s\n", info.SHA512, info.Size, path)
 	}
 
 	releaseFile := indexes.ReleaseFile()
