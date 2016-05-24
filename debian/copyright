@@ -55,12 +55,26 @@ Copyright: 2009 Google
 License: Apache-2
  See: /usr/share/common-licenses/Apache-2.0
 
+Files: src/github.com/smira/aptly/_vendor/src/github.com/aws/aws-sdk-go/*, src/github.com/smira/aptly/_vendor/src/github.com/go-ini/*, 
+Copyright: 2014 Unknown
+License: Apache-2
+ See: /usr/share/common-licenses/Apache-2.0
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/aws/aws-sdk-go/vendor/github.com/jmespath/go-jmespath/*
+Copyright: 2015 James Saryerwinnie
+License: Apache-2
+ See: /usr/share/common-licenses/Apache-2.0
+
 Files: src/github.com/smira/aptly/_vendor/src/github.com/golang/snappy/*
 Copyright: 2011 The Snappy-Go Authors
 License: BSD-3-clause
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/mattn/go-shellwords/*
 Copyright: 2013-2014 Yasuhiro Matsumoto
+License: MIT
+
+Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/go-aws-auth
+Copyright: 2013 SmartyStreets
 License: MIT
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/smira/commander/*
@@ -90,21 +104,6 @@ License: BSD-3-clause
 Files: src/github.com/smira/aptly/_vendor/src/github.com/mxk/*
 Copyright: 2013 Maxim Khitrov
 License: BSD-3-clause
-
-Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/*
-Copyright: 2011 Canonical Ltd
-License: LGPL-3
- See: /usr/share/common-licenses/LGPL-3
-
-Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/exp/sns/*
-Copyright: 2011 Memeo Inc
-License: LGPL-3
- See: /usr/share/common-licenses/LGPL-3
-
-Files: src/github.com/smira/aptly/_vendor/src/github.com/mitchellh/goamz/exp/sdb/*
-Copyright: 2011 AppsAttic Ltd
-License: LGPL-3
- See: /usr/share/common-licenses/LGPL-3
 
 Files: src/github.com/smira/aptly/_vendor/src/github.com/DisposaBoy/JsonConfigReader/*
 Copyright: 2012 The JsonConfigReader Authors
