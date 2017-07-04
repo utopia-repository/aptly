@@ -1,0 +1,19 @@
+Name: mirror19
+Archive Root URL: http://security.debian.org/
+Distribution: wheezy/updates
+Components: main
+Architectures: i386
+Download Sources: yes
+Download .udebs: no
+Last update: never
+
+Information from release file:
+Architectures: amd64 armel armhf i386
+Codename: wheezy
+Components: updates/main updates/contrib updates/non-free
+Description:  Long Term Support for Debian 7
+
+Label: Debian-Security
+Origin: Debian
+Suite: oldstable
+Version: 7.0
