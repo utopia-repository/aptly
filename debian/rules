@@ -9,8 +9,7 @@
 export DH_GOPKG := github.com/smira/aptly
 
 # our path
-PACKAGE_DIR := src/github.com/smira/aptly
-SOURCE_DIR := $(CURDIR)/$(PACKAGE_DIR)
+SOURCE_DIR := $(CURDIR)
 DEST_DIR := $(CURDIR)/debian/aptly
 
 %:
@@ -20,13 +19,15 @@ override_dh_auto_test:
 	# nothing for now
 
 override_dh_auto_clean:
-	rm -f aptly
 	rm -fr $(DEST_DIR)
 
 override_dh_auto_build:
-	GOPATH=$(CURDIR):$(SOURCE_DIR)/_vendor go build -o aptly $(PACKAGE_DIR)/main.go
 
 override_dh_auto_install:
+	mkdir -p $(CURDIR)/src/github.com/smira/
+	ln -sf ../../../ $(CURDIR)/src/github.com/smira/aptly
+	ls -l $(CURDIR)/src/github.com/smira/aptly/
+	GOBIN=$(CURDIR) GOPATH=$(CURDIR):$(SOURCE_DIR)/vendor go install -v $(SOURCE_DIR)/main.go
 	dh_bash-completion
 	mkdir -p $(DEST_DIR)/usr/bin
-	cp aptly  $(DEST_DIR)/usr/bin/
+	mv $(CURDIR)/main $(DEST_DIR)/usr/bin/aptly
