@@ -1,3 +1,12 @@
+aptly (1.1.1-1) unstable; urgency=medium
+
+  * New upstream version 1.1.1
+  * Use bash-completion snippet from upstream
+  * Bump up Standards-Version
+  * Update debian/copyright
+  
+ -- Sebastien Delafond <seb@debian.org>  Thu, 02 Nov 2017 09:03:23 +0100
+
 aptly (1.0.1-1) unstable; urgency=medium
 
   * Imported Upstream version 1.0.1
