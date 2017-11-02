@@ -1,6 +1,7 @@
 import os
 import hashlib
 import inspect
+import re
 import zlib
 from lib import BaseTest
 
@@ -567,7 +568,9 @@ class PublishRepo23Test(BaseTest):
     ]
     runCmd = "aptly publish repo -component=main,contrib repo1"
     expectedCode = 2
-    outputMatchPrepare = lambda _, s: "\n".join([l for l in s.split("\n") if l.startswith("ERROR")])
+
+    def outputMatchPrepare(_, s):
+        return "\n".join([l for l in s.split("\n") if l.startswith("ERROR")])
 
 
 class PublishRepo24Test(BaseTest):
@@ -616,7 +619,9 @@ class PublishRepo26Test(BaseTest):
     ]
     runCmd = "aptly publish repo -keyring=${files}/aptly_passphrase.pub -secret-keyring=${files}/aptly_passphrase.sec -passphrase=verysecret -distribution=maverick local-repo"
     gold_processor = BaseTest.expand_environ
-    outputMatchPrepare = lambda _, s: s.replace("gpg: gpg-agent is not available in this session\n", "")
+
+    def outputMatchPrepare(_, s):
+        return s.replace("gpg: gpg-agent is not available in this session\n", "")
 
     def check(self):
         super(PublishRepo26Test, self).check()
@@ -694,3 +699,64 @@ class PublishRepo28Test(BaseTest):
         self.check_not_exists('public/dists/maverick/main/Contents-i386.gz')
         self.check_exists('public/dists/maverick/main/debian-installer/binary-i386/Release')
         self.check_not_exists('public/dists/maverick/main/Contents-udeb-i386.gz')
+
+
+class PublishRepo29Test(BaseTest):
+    """
+    publish repo: broken .deb file for contents
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${testfiles}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick local-repo"
+    gold_processor = BaseTest.expand_environ
+
+
+class PublishRepo30Test(BaseTest):
+    """
+    publish repo: default (internal PGP implementation)
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=maverick local-repo"
+    gold_processor = BaseTest.expand_environ
+    configOverride = {"gpgProvider": "internal"}
+
+    def check(self):
+        super(PublishRepo30Test, self).check()
+
+        # verify signatures
+        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
+        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
+                      os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
+
+
+class PublishRepo31Test(BaseTest):
+    """
+    publish repo: sign with passphrase (internal PGP implementation)
+    """
+    fixtureCmds = [
+        "aptly repo create local-repo",
+        "aptly repo add local-repo ${files}",
+    ]
+    runCmd = "aptly publish repo -keyring=${files}/aptly_passphrase.pub -secret-keyring=${files}/aptly_passphrase.sec -passphrase=verysecret -distribution=maverick local-repo"
+    gold_processor = BaseTest.expand_environ
+    configOverride = {"gpgProvider": "internal"}
+
+    def outputMatchPrepare(_, s):
+        return re.sub(r' \d{4}-\d{2}-\d{2}', '', s)
+
+    def check(self):
+        super(PublishRepo31Test, self).check()
+
+        # verify signatures
+        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly_passphrase.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
+        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly_passphrase.pub"),
+                      "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
+                      os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])

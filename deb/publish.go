@@ -19,6 +19,7 @@ import (
 
 	"github.com/smira/aptly/aptly"
 	"github.com/smira/aptly/database"
+	"github.com/smira/aptly/pgp"
 	"github.com/smira/aptly/utils"
 )
 
@@ -36,17 +37,17 @@ type PublishedRepo struct {
 	// Internal unique ID
 	UUID string
 	// Storage & Prefix & distribution should be unique across all published repositories
-	Storage      string
-	Prefix       string
-	Distribution string
-	Origin       string
-	Label        string
+	Storage              string
+	Prefix               string
+	Distribution         string
+	Origin               string
+	NotAutomatic         string
+	ButAutomaticUpgrades string
+	Label                string
 	// Architectures is a list of all architectures published
 	Architectures []string
 	// SourceKind is "local"/"repo"
 	SourceKind string
-	// Skip contents generation
-	SkipContents bool
 
 	// Map of sources by each component: component name -> source UUID
 	Sources map[string]string
@@ -55,9 +56,11 @@ type PublishedRepo struct {
 	Component string
 	// SourceUUID is UUID of either snapshot or local repo
 	SourceUUID string `codec:"SnapshotUUID"`
-
 	// Map of component to source items
 	sourceItems map[string]repoSourceItem
+
+	// Skip contents generation
+	SkipContents bool
 
 	// True if repo is being re-published
 	rePublishing bool
@@ -75,6 +78,7 @@ func ParsePrefix(param string) (storage, prefix string) {
 	} else {
 		prefix = param
 	}
+	prefix = strings.TrimPrefix(strings.TrimSuffix(prefix, "/"), "/")
 	return
 }
 
@@ -96,19 +100,19 @@ func walkUpTree(source interface{}, collectionFactory *CollectionFactory) (rootD
 
 		if snapshot, ok := head.(*Snapshot); ok {
 			for _, uuid := range snapshot.SourceIDs {
-				if snapshot.SourceKind == "repo" {
+				if snapshot.SourceKind == SourceRemoteRepo {
 					remoteRepo, err := collectionFactory.RemoteRepoCollection().ByUUID(uuid)
 					if err != nil {
 						continue
 					}
 					current = append(current, remoteRepo)
-				} else if snapshot.SourceKind == "local" {
+				} else if snapshot.SourceKind == SourceLocalRepo {
 					localRepo, err := collectionFactory.LocalRepoCollection().ByUUID(uuid)
 					if err != nil {
 						continue
 					}
 					current = append(current, localRepo)
-				} else if snapshot.SourceKind == "snapshot" {
+				} else if snapshot.SourceKind == SourceSnapshot {
 					snap, err := collectionFactory.SnapshotCollection().ByUUID(uuid)
 					if err != nil {
 						continue
@@ -166,23 +170,20 @@ func NewPublishedRepo(storage, prefix, distribution string, architectures []stri
 		component               string
 		snapshot                *Snapshot
 		localRepo               *LocalRepo
-		ok                      bool
+		fields                  = make(map[string][]string)
 	)
 
 	// get first source
 	source = sources[0]
 
 	// figure out source kind
-	snapshot, ok = source.(*Snapshot)
-	if ok {
-		result.SourceKind = "snapshot"
-	} else {
-		localRepo, ok = source.(*LocalRepo)
-		if ok {
-			result.SourceKind = "local"
-		} else {
-			panic("unknown source kind")
-		}
+	switch source.(type) {
+	case *Snapshot:
+		result.SourceKind = SourceSnapshot
+	case *LocalRepo:
+		result.SourceKind = SourceLocalRepo
+	default:
+		panic("unknown source kind")
 	}
 
 	for i := range sources {
@@ -213,11 +214,21 @@ func NewPublishedRepo(storage, prefix, distribution string, architectures []stri
 			return nil, fmt.Errorf("duplicate component name: %s", component)
 		}
 
-		if result.SourceKind == "snapshot" {
+		if result.SourceKind == SourceSnapshot {
 			snapshot = source.(*Snapshot)
 			result.Sources[component] = snapshot.UUID
 			result.sourceItems[component] = repoSourceItem{snapshot: snapshot}
-		} else if result.SourceKind == "local" {
+
+			if !utils.StrSliceHasItem(fields["Origin"], snapshot.Origin) {
+				fields["Origin"] = append(fields["Origin"], snapshot.Origin)
+			}
+			if !utils.StrSliceHasItem(fields["NotAutomatic"], snapshot.NotAutomatic) {
+				fields["NotAutomatic"] = append(fields["NotAutomatic"], snapshot.NotAutomatic)
+			}
+			if !utils.StrSliceHasItem(fields["ButAutomaticUpgrades"], snapshot.ButAutomaticUpgrades) {
+				fields["ButAutomaticUpgrades"] = append(fields["ButAutomaticUpgrades"], snapshot.ButAutomaticUpgrades)
+			}
+		} else if result.SourceKind == SourceLocalRepo {
 			localRepo = source.(*LocalRepo)
 			result.Sources[component] = localRepo.UUID
 			result.sourceItems[component] = repoSourceItem{localRepo: localRepo, packageRefs: localRepo.RefList()}
@@ -226,12 +237,7 @@ func NewPublishedRepo(storage, prefix, distribution string, architectures []stri
 
 	// clean & verify prefix
 	prefix = filepath.Clean(prefix)
-	if strings.HasPrefix(prefix, "/") {
-		prefix = prefix[1:]
-	}
-	if strings.HasSuffix(prefix, "/") {
-		prefix = prefix[:len(prefix)-1]
-	}
+	prefix = strings.TrimPrefix(strings.TrimSuffix(prefix, "/"), "/")
 	prefix = filepath.Clean(prefix)
 
 	for _, part := range strings.Split(prefix, "/") {
@@ -252,11 +258,22 @@ func NewPublishedRepo(storage, prefix, distribution string, architectures []stri
 		}
 	}
 
-	if strings.Index(distribution, "/") != -1 {
+	if strings.Contains(distribution, "/") {
 		return nil, fmt.Errorf("invalid distribution %s, '/' is not allowed", distribution)
 	}
 
 	result.Distribution = distribution
+
+	// only fields which are unique by all given snapshots are set on published
+	if len(fields["Origin"]) == 1 {
+		result.Origin = fields["Origin"][0]
+	}
+	if len(fields["NotAutomatic"]) == 1 {
+		result.NotAutomatic = fields["NotAutomatic"][0]
+	}
+	if len(fields["ButAutomaticUpgrades"]) == 1 {
+		result.ButAutomaticUpgrades = fields["ButAutomaticUpgrades"][0]
+	}
 
 	return result, nil
 }
@@ -284,15 +301,17 @@ func (p *PublishedRepo) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(map[string]interface{}{
-		"Architectures": p.Architectures,
-		"Distribution":  p.Distribution,
-		"Label":         p.Label,
-		"Origin":        p.Origin,
-		"Prefix":        p.Prefix,
-		"SourceKind":    p.SourceKind,
-		"Sources":       sources,
-		"Storage":       p.Storage,
-		"SkipContents":  p.SkipContents,
+		"Architectures":        p.Architectures,
+		"Distribution":         p.Distribution,
+		"Label":                p.Label,
+		"Origin":               p.Origin,
+		"NotAutomatic":         p.NotAutomatic,
+		"ButAutomaticUpgrades": p.ButAutomaticUpgrades,
+		"Prefix":               p.Prefix,
+		"SourceKind":           p.SourceKind,
+		"Sources":              sources,
+		"Storage":              p.Storage,
+		"SkipContents":         p.SkipContents,
 	})
 }
 
@@ -315,18 +334,26 @@ func (p *PublishedRepo) String() string {
 		sources = append(sources, fmt.Sprintf("{%s: %s}", component, source))
 	}
 
+	var extras []string
 	var extra string
 
 	if p.Origin != "" {
-		extra += fmt.Sprintf("origin: %s", p.Origin)
+		extras = append(extras, fmt.Sprintf("origin: %s", p.Origin))
+	}
+
+	if p.NotAutomatic != "" {
+		extras = append(extras, fmt.Sprintf("notautomatic: %s", p.NotAutomatic))
+	}
+
+	if p.ButAutomaticUpgrades != "" {
+		extras = append(extras, fmt.Sprintf("butautomaticupgrades: %s", p.ButAutomaticUpgrades))
 	}
 
 	if p.Label != "" {
-		if extra != "" {
-			extra += ", "
-		}
-		extra += fmt.Sprintf("label: %s", p.Label)
+		extras = append(extras, fmt.Sprintf("label: %s", p.Label))
 	}
+
+	extra = strings.Join(extras, ", ")
 
 	if extra != "" {
 		extra = " (" + extra + ")"
@@ -358,10 +385,10 @@ func (p *PublishedRepo) RefKey(component string) []byte {
 // RefList returns list of package refs in local repo
 func (p *PublishedRepo) RefList(component string) *PackageRefList {
 	item := p.sourceItems[component]
-	if p.SourceKind == "local" {
+	if p.SourceKind == SourceLocalRepo {
 		return item.packageRefs
 	}
-	if p.SourceKind == "snapshot" {
+	if p.SourceKind == SourceSnapshot {
 		return item.snapshot.RefList()
 	}
 	panic("unknown source")
@@ -380,7 +407,7 @@ func (p *PublishedRepo) Components() []string {
 
 // UpdateLocalRepo updates content from local repo in component
 func (p *PublishedRepo) UpdateLocalRepo(component string) {
-	if p.SourceKind != "local" {
+	if p.SourceKind != SourceLocalRepo {
 		panic("not local repo publish")
 	}
 
@@ -393,7 +420,7 @@ func (p *PublishedRepo) UpdateLocalRepo(component string) {
 
 // UpdateSnapshot switches snapshot for component
 func (p *PublishedRepo) UpdateSnapshot(component string, snapshot *Snapshot) {
-	if p.SourceKind != "snapshot" {
+	if p.SourceKind != SourceSnapshot {
 		panic("not snapshot publish")
 	}
 
@@ -425,7 +452,7 @@ func (p *PublishedRepo) Decode(input []byte) error {
 
 	// old PublishedRepo were publishing only snapshots
 	if p.SourceKind == "" {
-		p.SourceKind = "snapshot"
+		p.SourceKind = SourceSnapshot
 	}
 
 	// <0.6 aptly used single SourceUUID + Component instead of Sources
@@ -456,7 +483,7 @@ func (p *PublishedRepo) GetLabel() string {
 
 // Publish publishes snapshot (repository) contents, links package files, generates Packages & Release files, signs them
 func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageProvider aptly.PublishedStorageProvider,
-	collectionFactory *CollectionFactory, signer utils.Signer, progress aptly.Progress, forceOverwrite bool) error {
+	collectionFactory *CollectionFactory, signer pgp.Signer, progress aptly.Progress, forceOverwrite bool) error {
 	publishedStorage := publishedStorageProvider.GetPublishedStorage(p.Storage)
 
 	err := publishedStorage.MkDir(filepath.Join(p.Prefix, "pool"))
@@ -474,8 +501,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 		return err
 	}
 	defer func() {
-		var e error
-		e = tempDB.Close()
+		e := tempDB.Close()
 		if e != nil && progress != nil {
 			progress.Printf("failed to close temp DB: %s", err)
 		}
@@ -583,7 +609,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 							contentIndexes[key] = contentIndex
 						}
 
-						contentIndex.Push(pkg, packagePool)
+						contentIndex.Push(pkg, packagePool, progress)
 					}
 
 					bufWriter, err = indexes.PackageIndex(component, arch, pkg.IsUdeb).BufWriter()
@@ -621,7 +647,8 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 					continue
 				}
 
-				bufWriter, err := indexes.ContentsIndex(component, arch, udeb).BufWriter()
+				var bufWriter *bufio.Writer
+				bufWriter, err = indexes.ContentsIndex(component, arch, udeb).BufWriter()
 				if err != nil {
 					return fmt.Errorf("unable to generate contents index: %v", err)
 				}
@@ -682,11 +709,17 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 
 	release := make(Stanza)
 	release["Origin"] = p.GetOrigin()
+	if p.NotAutomatic != "" {
+		release["NotAutomatic"] = p.NotAutomatic
+	}
+	if p.ButAutomaticUpgrades != "" {
+		release["ButAutomaticUpgrades"] = p.ButAutomaticUpgrades
+	}
 	release["Label"] = p.GetLabel()
 	release["Suite"] = p.Distribution
 	release["Codename"] = p.Distribution
 	release["Date"] = time.Now().UTC().Format("Mon, 2 Jan 2006 15:04:05 MST")
-	release["Architectures"] = strings.Join(utils.StrSlicesSubstract(p.Architectures, []string{"source"}), " ")
+	release["Architectures"] = strings.Join(utils.StrSlicesSubstract(p.Architectures, []string{ArchitectureSource}), " ")
 	release["Description"] = " Generated by aptly\n"
 	release["MD5Sum"] = ""
 	release["SHA1"] = ""
@@ -730,12 +763,7 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 		return err
 	}
 
-	err = indexes.RenameFiles()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return indexes.RenameFiles()
 }
 
 // RemoveFiles removes files that were created by Publish
@@ -834,7 +862,7 @@ func (collection *PublishedRepoCollection) Update(repo *PublishedRepo) (err erro
 		return
 	}
 
-	if repo.SourceKind == "local" {
+	if repo.SourceKind == SourceLocalRepo {
 		for component, item := range repo.sourceItems {
 			err = collection.db.Put(repo.RefKey(component), item.packageRefs.Encode())
 			if err != nil {
@@ -849,7 +877,7 @@ func (collection *PublishedRepoCollection) Update(repo *PublishedRepo) (err erro
 func (collection *PublishedRepoCollection) LoadComplete(repo *PublishedRepo, collectionFactory *CollectionFactory) (err error) {
 	repo.sourceItems = make(map[string]repoSourceItem)
 
-	if repo.SourceKind == "snapshot" {
+	if repo.SourceKind == SourceSnapshot {
 		for component, sourceUUID := range repo.Sources {
 			item := repoSourceItem{}
 
@@ -864,7 +892,7 @@ func (collection *PublishedRepoCollection) LoadComplete(repo *PublishedRepo, col
 
 			repo.sourceItems[component] = item
 		}
-	} else if repo.SourceKind == "local" {
+	} else if repo.SourceKind == SourceLocalRepo {
 		for component, sourceUUID := range repo.Sources {
 			item := repoSourceItem{}
 
@@ -932,7 +960,7 @@ func (collection *PublishedRepoCollection) ByUUID(uuid string) (*PublishedRepo, 
 func (collection *PublishedRepoCollection) BySnapshot(snapshot *Snapshot) []*PublishedRepo {
 	var result []*PublishedRepo
 	for _, r := range collection.list {
-		if r.SourceKind == "snapshot" {
+		if r.SourceKind == SourceSnapshot {
 			if r.SourceUUID == snapshot.UUID {
 				result = append(result, r)
 			}
@@ -952,7 +980,7 @@ func (collection *PublishedRepoCollection) BySnapshot(snapshot *Snapshot) []*Pub
 func (collection *PublishedRepoCollection) ByLocalRepo(repo *LocalRepo) []*PublishedRepo {
 	var result []*PublishedRepo
 	for _, r := range collection.list {
-		if r.SourceKind == "local" {
+		if r.SourceKind == SourceLocalRepo {
 			if r.SourceUUID == repo.UUID {
 				result = append(result, r)
 			}

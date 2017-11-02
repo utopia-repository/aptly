@@ -608,14 +608,14 @@ class PublishSnapshot23Test(BaseTest):
 
 class PublishSnapshot24Test(BaseTest):
     """
-    publish snapshot: custom origin
+    publish snapshot: custom origin, notautomatic and butautomaticupgrades
     """
     fixtureDB = True
     fixturePool = True
     fixtureCmds = [
         "aptly snapshot create snap24 from mirror gnuplot-maverick",
     ]
-    runCmd = "aptly publish snapshot -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=squeeze -origin=aptly24 snap24"
+    runCmd = "aptly publish snapshot -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec -distribution=squeeze -origin=aptly24 -notautomatic=yes -butautomaticupgrades=yes snap24"
     gold_processor = BaseTest.expand_environ
 
     def check(self):
@@ -833,7 +833,9 @@ class PublishSnapshot32Test(BaseTest):
     ]
     runCmd = "aptly publish snapshot -component=main,contrib snap32.1"
     expectedCode = 2
-    outputMatchPrepare = lambda _, s: "\n".join([l for l in s.split("\n") if l.startswith("ERROR")])
+
+    def outputMatchPrepare(_, s):
+        return "\n".join([l for l in s.split("\n") if l.startswith("ERROR")])
 
 
 class PublishSnapshot33Test(BaseTest):
@@ -999,3 +1001,18 @@ class PublishSnapshot36Test(BaseTest):
         self.check_not_exists('public/dists/maverick/main/Contents-i386.gz')
         self.check_exists('public/dists/maverick/main/binary-amd64/Release')
         self.check_not_exists('public/dists/maverick/main/Contents-amd64.gz')
+
+
+class PublishSnapshot37Test(BaseTest):
+    """
+    publish snapshot: mirror with double mirror update
+    """
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly -architectures=i386,amd64 mirror create -keyring=aptlytest.gpg -filter='$$Source (gnupg)' -with-udebs wheezy http://mirror.yandex.ru/debian/ wheezy main non-free",
+        "aptly mirror update -keyring=aptlytest.gpg wheezy",
+        "aptly mirror update -keyring=aptlytest.gpg wheezy",
+        "aptly snapshot create wheezy from mirror wheezy",
+    ]
+    runCmd = "aptly publish snapshot -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec wheezy"
+    gold_processor = BaseTest.expand_environ

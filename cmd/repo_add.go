@@ -20,7 +20,7 @@ func aptlyRepoAdd(cmd *commander.Command, args []string) error {
 
 	name := args[0]
 
-	verifier := &utils.GpgVerifier{}
+	verifier := context.GetVerifier()
 
 	repo, err := context.CollectionFactory().LocalRepoCollection().ByName(name)
 	if err != nil {
@@ -48,7 +48,8 @@ func aptlyRepoAdd(cmd *commander.Command, args []string) error {
 	var processedFiles, failedFiles2 []string
 
 	processedFiles, failedFiles2, err = deb.ImportPackageFiles(list, packageFiles, forceReplace, verifier, context.PackagePool(),
-		context.CollectionFactory().PackageCollection(), &aptly.ConsoleResultReporter{Progress: context.Progress()}, nil)
+		context.CollectionFactory().PackageCollection(), &aptly.ConsoleResultReporter{Progress: context.Progress()}, nil,
+		context.CollectionFactory().ChecksumCollection())
 	failedFiles = append(failedFiles, failedFiles2...)
 	if err != nil {
 		return fmt.Errorf("unable to import package files: %s", err)
@@ -65,7 +66,7 @@ func aptlyRepoAdd(cmd *commander.Command, args []string) error {
 		processedFiles = utils.StrSliceDeduplicate(processedFiles)
 
 		for _, file := range processedFiles {
-			err := os.Remove(file)
+			err = os.Remove(file)
 			if err != nil {
 				return fmt.Errorf("unable to remove file: %s", err)
 			}

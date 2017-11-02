@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "APTLY" "1" "March 2017" "" ""
+.TH "APTLY" "1" "July 2017" "" ""
 .
 .SH "NAME"
 \fBaptly\fR \- Debian repository management tool
@@ -43,12 +43,30 @@ Configuration file is stored in JSON format (default values shown below):
   "dependencyFollowRecommends": false,
   "dependencyFollowAllVariants": false,
   "dependencyFollowSource": false,
+  "dependencyVerboseResolve": false,
   "gpgDisableSign": false,
   "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
   "downloadSourcePackages": false,
+  "skipLegacyPool": true,
   "ppaDistributorID": "ubuntu",
   "ppaCodename": "",
   "skipContentsPublishing": false,
+  "FileSystemPublishEndpoints": {
+    "test1": {
+      "rootDir": "/opt/srv1/aptly_public",
+      "linkMethod": "symlink"
+    },
+    "test2": {
+      "rootDir": "/opt/srv2/aptly_public",
+      "linkMethod": "copy",
+      "verifyMethod": "md5"
+    },
+    "test3": {
+      "rootDir": "/opt/srv3/aptly_public",
+      "linkMethod": "hardlink"
+    }
+  },
   "S3PublishEndpoints": {
     "test": {
       "region": "us\-east\-1",
@@ -88,7 +106,7 @@ Options:
 .
 .TP
 \fBrootDir\fR
-is root of directory storage to store database (\fBrootDir\fR/db), downloaded packages (\fBrootDir\fR/pool) and published repositories (\fBrootDir\fR/public)
+is root of directory storage to store database (\fBrootDir\fR/db), downloaded packages (\fBrootDir\fR/pool) and the default for published repositories (\fBrootDir\fR/public)
 .
 .TP
 \fBdownloadConcurrency\fR
@@ -119,6 +137,10 @@ when dependency looks like \fBpackage\-a | package\-b\fR, follow both variants a
 follow dependency from binary package to source package
 .
 .TP
+\fBdependencyVerboseResolve\fR
+print additional details while resolving dependencies (useful for debugging)
+.
+.TP
 \fBgpgDisableSign\fR
 don\(cqt sign published repositories with gpg(1), also can be disabled on per\-repo basis using \fB\-skip\-signing\fR flag when publishing
 .
@@ -127,12 +149,24 @@ don\(cqt sign published repositories with gpg(1), also can be disabled on per\-r
 don\(cqt verify remote mirrors with gpg(1), also can be disabled on per\-mirror basis using \fB\-ignore\-signatures\fR flag when creating and updating mirrors
 .
 .TP
+\fBgpgProvider\fR
+implementation of PGP signing/validation \- \fBgpg\fR for external \fBgpg\fR utility or \fBinternal\fR to use Go internal implementation
+.
+.TP
 \fBdownloadSourcePackages\fR
 if enabled, all mirrors created would have flag set to download source packages; this setting could be controlled on per\-mirror basis with \fB\-with\-sources\fR flag
 .
 .TP
+\fBskipLegacyPool\fR
+in aptly up to version 1\.0\.0, package files were stored in internal package pool with MD5\-dervied path, since 1\.1\.0 package pool layout was changed; if option is enabled, aptly stops checking for legacy paths; by default option is enabled for new aptly installations and disabled when upgrading from older versions
+.
+.TP
 \fBppaDistributorID\fR, \fBppaCodename\fR
 specifies paramaters for short PPA url expansion, if left blank they default to output of \fBlsb_release\fR command
+.
+.TP
+\fBFileSystemPublishEndpoints\fR
+configuration of local filesystem publishing endpoints (see below)
 .
 .TP
 \fBS3PublishEndpoints\fR
@@ -141,6 +175,27 @@ configuration of Amazon S3 publishing endpoints (see below)
 .TP
 \fBSwiftPublishEndpoints\fR
 configuration of OpenStack Swift publishing endpoints (see below)
+.
+.SH "FILESYSTEM PUBLISHING ENDPOINTS"
+aptly defaults to publish to a single publish directory under \fBrootDir\fR/public\. For a more advanced publishing strategy, you can define one or more filesystem endpoints in the \fBFileSystemPublishEndpoints\fR list of the aptly configuration file\. Each endpoint has a name and the following associated settings:
+.
+.TP
+\fBrootDir\fR
+The publish directory, e\.g\., \fB/opt/srv/aptly_public\fR\.
+.
+.TP
+\fBlinkMethod\fR
+This is one of \fBhardlink\fR, \fBsymlink\fR or \fBcopy\fR\. It specifies how aptly links the files from the internal pool to the published directory\. If not specified, empty or wrong, this defaults to \fBhardlink\fR\.
+.
+.TP
+\fBverifyMethod\fR
+This is used only when setting the \fBlinkMethod\fR to \fBcopy\fR\. Possible values are \fBmd5\fR and \fBsize\fR\. It specifies how aptly compares existing links from the internal pool to the published directory\. The \fBsize\fR method compares only the file sizes, whereas the \fBmd5\fR method calculates the md5 checksum of the found file and compares it to the desired one\. If not specified, empty or wrong, this defaults to \fBmd5\fR\.
+.
+.P
+In order to publish to such an endpoint, specify the endpoint as \fBfilesystem:endpoint\-name\fR with \fBendpoint\-name\fR as the name given in the aptly configuration file\. For example:
+.
+.P
+\fBaptly publish snapshot wheezy\-main filesystem:test1:wheezy/daily\fR
 .
 .SH "S3 PUBLISHING ENDPOINTS"
 aptly could be configured to publish repository directly to Amazon S3 (or S3\-compatible cloud storage)\. First, publishing endpoints should be described in aptly configuration file\. Each endpoint has name and associated settings:
@@ -184,6 +239,14 @@ bucket name
 .TP
 \fBdisableMultiDel\fR
 (optional) for S3\-compatible cloud storages which do not support \fBMultiDel\fR S3 API, enable this setting (file deletion would be slower with this setting enabled)
+.
+.TP
+\fBforceSigV2\fR
+(optional) disable Signature V4 support, useful with non\-AWS S3\-compatible object stores which do not support SigV4, shouldn\(cqt be enabled for AWS
+.
+.TP
+\fBdebug\fR
+(optional) enables detailed request/response dump for each S3 operation
 .
 .P
 In order to publish to S3, specify endpoint as \fBs3:endpoint\-name:\fR before publishing prefix on the command line, e\.g\.:
@@ -346,6 +409,10 @@ list of architectures to consider during (comma\-separated), default to all avai
 location of configuration file (default locations are /etc/aptly\.conf, ~/\.aptly\.conf)
 .
 .TP
+\-\fBdb\-open\-attempts\fR=10
+number of attempts to open DB if it\(cqs locked by other instance
+.
+.TP
 \-\fBdep\-follow\-all\-variants\fR=false
 when processing dependencies, follow a & b if dependency is \(cqa|b\(cq
 .
@@ -360,6 +427,14 @@ when processing dependencies, follow from binary to Source packages
 .TP
 \-\fBdep\-follow\-suggests\fR=false
 when processing dependencies, follow Suggests
+.
+.TP
+\-\fBdep\-verbose\-resolve\fR=false
+when processing dependencies, print detailed logs
+.
+.TP
+\-\fBgpg\-provider\fR=
+PGP implementation ("gpg" for external gpg or "internal" for Go internal implementation)
 .
 .SH "CREATE NEW MIRROR"
 \fBaptly\fR \fBmirror\fR \fBcreate\fR \fIname\fR \fIarchive url\fR \fIdistribution\fR [\fIcomponent1\fR \|\.\|\.\|\.]
@@ -509,6 +584,10 @@ gpg keyring to use when verifying Release file (could be specified multiple time
 .TP
 \-\fBmax\-tries\fR=1
 max download tries till process fails with download error
+.
+.TP
+\-\fBskip\-existing\-packages\fR=false
+do not check file existence for packages listed in the internal database of the mirror
 .
 .SH "RENAMES MIRROR"
 \fBaptly\fR \fBmirror\fR \fBrename\fR \fIold\-name\fR \fInew\-name\fR
@@ -1282,6 +1361,10 @@ Options:
 run GPG with detached tty
 .
 .TP
+\-\fBbutautomaticupgrades\fR=
+set value for ButAutomaticUpgrades field
+.
+.TP
 \-\fBcomponent\fR=
 component name to publish (for multi\-component publishing, separate components with commas)
 .
@@ -1304,6 +1387,10 @@ GPG keyring to use (instead of default)
 .TP
 \-\fBlabel\fR=
 label to publish
+.
+.TP
+\-\fBnotautomatic\fR=
+set value for NotAutomatic field
 .
 .TP
 \-\fBorigin\fR=
@@ -1369,6 +1456,10 @@ Options:
 run GPG with detached tty
 .
 .TP
+\-\fBbutautomaticupgrades\fR=
+overwrite value for ButAutomaticUpgrades field
+.
+.TP
 \-\fBcomponent\fR=
 component name to publish (for multi\-component publishing, separate components with commas)
 .
@@ -1393,8 +1484,12 @@ GPG keyring to use (instead of default)
 label to publish
 .
 .TP
+\-\fBnotautomatic\fR=
+overwrite value for NotAutomatic field
+.
+.TP
 \-\fBorigin\fR=
-origin name to publish
+overwrite origin name to publish
 .
 .TP
 \-\fBpassphrase\fR=
@@ -1891,5 +1986,10 @@ Johannes Layher (https://github\.com/jola5)
 .IP "\[ci]" 4
 Charles Hsu (https://github\.com/charz)
 .
+.IP "\[ci]" 4
+Clemens Rabe (https://github\.com/seeraven)
+.
+.IP "\[ci]" 4
+TJ Merritt (https://github\.com/tjmerritt)
+.
 .IP "" 0
-

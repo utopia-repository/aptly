@@ -12,10 +12,18 @@ import (
 
 	"github.com/h2non/filetype/matchers"
 	"github.com/mkrautz/goar"
+	"github.com/pkg/errors"
 
-	"github.com/smira/aptly/utils"
+	"github.com/smira/aptly/pgp"
 	"github.com/smira/go-xz"
 	"github.com/smira/lzma"
+)
+
+// Source kinds
+const (
+	SourceSnapshot   = "snapshot"
+	SourceLocalRepo  = "local"
+	SourceRemoteRepo = "repo"
 )
 
 // GetControlFileFromDeb reads control file from deb package
@@ -68,7 +76,7 @@ func GetControlFileFromDeb(packageFile string) (Stanza, error) {
 }
 
 // GetControlFileFromDsc reads control file from dsc package
-func GetControlFileFromDsc(dscFile string, verifier utils.Verifier) (Stanza, error) {
+func GetControlFileFromDsc(dscFile string, verifier pgp.Verifier) (Stanza, error) {
 	file, err := os.Open(dscFile)
 	if err != nil {
 		return nil, err
@@ -82,7 +90,7 @@ func GetControlFileFromDsc(dscFile string, verifier utils.Verifier) (Stanza, err
 		return nil, err
 	}
 
-	var text *os.File
+	var text io.ReadCloser
 
 	if isClearSigned {
 		text, err = verifier.ExtractClearsigned(file)
@@ -105,13 +113,7 @@ func GetControlFileFromDsc(dscFile string, verifier utils.Verifier) (Stanza, err
 }
 
 // GetContentsFromDeb returns list of files installed by .deb package
-func GetContentsFromDeb(packageFile string) ([]string, error) {
-	file, err := os.Open(packageFile)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
+func GetContentsFromDeb(file io.Reader, packageFile string) ([]string, error) {
 	library := ar.NewReader(file)
 	for {
 		header, err := library.Next()
@@ -119,7 +121,7 @@ func GetContentsFromDeb(packageFile string) ([]string, error) {
 			return nil, fmt.Errorf("unable to find data.tar.* part in %s", packageFile)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("unable to read .deb archive from %s: %s", packageFile, err)
+			return nil, errors.Wrapf(err, "unable to read .deb archive from %s", packageFile)
 		}
 
 		if strings.HasPrefix(header.Name, "data.tar") {
@@ -142,7 +144,7 @@ func GetContentsFromDeb(packageFile string) ([]string, error) {
 				} else {
 					ungzip, err := gzip.NewReader(bufReader)
 					if err != nil {
-						return nil, fmt.Errorf("unable to ungzip data.tar.gz from %s: %s", packageFile, err)
+						return nil, errors.Wrapf(err, "unable to ungzip data.tar.gz from %s", packageFile)
 					}
 					defer ungzip.Close()
 					tarInput = ungzip
@@ -152,7 +154,7 @@ func GetContentsFromDeb(packageFile string) ([]string, error) {
 			case "data.tar.xz":
 				unxz, err := xz.NewReader(bufReader)
 				if err != nil {
-					return nil, fmt.Errorf("unable to unxz data.tar.xz from %s: %s", packageFile, err)
+					return nil, errors.Wrapf(err, "unable to unxz data.tar.xz from %s", packageFile)
 				}
 				defer unxz.Close()
 				tarInput = unxz
@@ -172,16 +174,14 @@ func GetContentsFromDeb(packageFile string) ([]string, error) {
 					return results, nil
 				}
 				if err != nil {
-					return nil, fmt.Errorf("unable to read .tar archive from %s: %s", packageFile, err)
+					return nil, errors.Wrapf(err, "unable to read .tar archive from %s", packageFile)
 				}
 
 				if tarHeader.Typeflag == tar.TypeDir {
 					continue
 				}
 
-				if strings.HasPrefix(tarHeader.Name, "./") {
-					tarHeader.Name = tarHeader.Name[2:]
-				}
+				tarHeader.Name = strings.TrimPrefix(tarHeader.Name[2:], "./")
 				results = append(results, tarHeader.Name)
 			}
 		}

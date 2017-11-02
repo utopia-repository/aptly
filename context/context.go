@@ -3,6 +3,7 @@ package context
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +18,7 @@ import (
 	"github.com/smira/aptly/deb"
 	"github.com/smira/aptly/files"
 	"github.com/smira/aptly/http"
+	"github.com/smira/aptly/pgp"
 	"github.com/smira/aptly/s3"
 	"github.com/smira/aptly/swift"
 	"github.com/smira/aptly/utils"
@@ -101,6 +103,9 @@ func (context *AptlyContext) config() *utils.ConfigStructure {
 
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Config file not found, creating default config at %s\n\n", configLocations[0])
+
+				// as this is fresh aptly installation, we don't need to support legacy pool locations
+				utils.Config.SkipLegacyPool = true
 				utils.SaveConfig(configLocations[0], &utils.Config)
 			}
 		}
@@ -148,6 +153,9 @@ func (context *AptlyContext) DependencyOptions() int {
 		}
 		if context.lookupOption(context.config().DepFollowSource, "dep-follow-source") {
 			context.dependencyOptions |= deb.DepFollowSource
+		}
+		if context.lookupOption(context.config().DepVerboseResolve, "dep-verbose-resolve") {
+			context.dependencyOptions |= deb.DepVerboseResolve
 		}
 	}
 
@@ -201,8 +209,7 @@ func (context *AptlyContext) Downloader() aptly.Downloader {
 		if downloadLimit == 0 {
 			downloadLimit = context.config().DownloadLimit
 		}
-		context.downloader = http.NewDownloader(context.config().DownloadConcurrency,
-			downloadLimit*1024, context._progress())
+		context.downloader = http.NewDownloader(downloadLimit*1024, context._progress())
 	}
 
 	return context.downloader
@@ -233,13 +240,34 @@ func (context *AptlyContext) _database() (database.Storage, error) {
 	if context.database == nil {
 		var err error
 
-		context.database, err = database.OpenDB(context.dbPath())
+		context.database, err = database.NewDB(context.dbPath())
 		if err != nil {
-			return nil, fmt.Errorf("can't open database: %s", err)
+			return nil, fmt.Errorf("can't instantiate database: %s", err)
 		}
 	}
 
-	return context.database, nil
+	tries := context.flags.Lookup("db-open-attempts").Value.Get().(int)
+	const BaseDelay = 10 * time.Second
+	const Jitter = 1 * time.Second
+
+	for ; tries >= 0; tries-- {
+		err := context.database.Open()
+		if err == nil || !strings.Contains(err.Error(), "resource temporarily unavailable") {
+			return context.database, err
+		}
+
+		if tries > 0 {
+			delay := time.Duration(rand.NormFloat64()*float64(Jitter) + float64(BaseDelay))
+			if delay < 0 {
+				delay = time.Second
+			}
+
+			context._progress().PrintfStdErr("Unable to open database, sleeping %s, attempts left %d...\n", delay, tries)
+			time.Sleep(delay)
+		}
+	}
+
+	return nil, fmt.Errorf("unable to reopen the DB, maximum number of retries reached")
 }
 
 // CloseDatabase closes the db temporarily
@@ -256,26 +284,9 @@ func (context *AptlyContext) CloseDatabase() error {
 
 // ReOpenDatabase reopens the db after close
 func (context *AptlyContext) ReOpenDatabase() error {
-	context.Lock()
-	defer context.Unlock()
+	_, err := context.Database()
 
-	if context.database == nil {
-		return nil
-	}
-
-	const MaxTries = 10
-	const Delay = 10 * time.Second
-
-	for try := 0; try < MaxTries; try++ {
-		err := context.database.ReOpen()
-		if err == nil || strings.Index(err.Error(), "resource temporarily unavailable") == -1 {
-			return err
-		}
-		context._progress().Printf("Unable to reopen database, sleeping %s\n", Delay)
-		<-time.After(Delay)
-	}
-
-	return fmt.Errorf("unable to reopen the DB, maximum number of retries reached")
+	return err
 }
 
 // CollectionFactory builds factory producing all kinds of collections
@@ -300,7 +311,7 @@ func (context *AptlyContext) PackagePool() aptly.PackagePool {
 	defer context.Unlock()
 
 	if context.packagePool == nil {
-		context.packagePool = files.NewPackagePool(context.config().RootDir)
+		context.packagePool = files.NewPackagePool(context.config().RootDir, !context.config().SkipLegacyPool)
 	}
 
 	return context.packagePool
@@ -314,7 +325,14 @@ func (context *AptlyContext) GetPublishedStorage(name string) aptly.PublishedSto
 	publishedStorage, ok := context.publishedStorages[name]
 	if !ok {
 		if name == "" {
-			publishedStorage = files.NewPublishedStorage(context.config().RootDir)
+			publishedStorage = files.NewPublishedStorage(filepath.Join(context.config().RootDir, "public"), "hardlink", "")
+		} else if strings.HasPrefix(name, "filesystem:") {
+			params, ok := context.config().FileSystemPublishRoots[name[11:]]
+			if !ok {
+				Fatal(fmt.Errorf("published local storage %v not configured", name[6:]))
+			}
+
+			publishedStorage = files.NewPublishedStorage(params.RootDir, params.LinkMethod, params.VerifyMethod)
 		} else if strings.HasPrefix(name, "s3:") {
 			params, ok := context.config().S3PublishRoots[name[3:]]
 			if !ok {
@@ -354,6 +372,46 @@ func (context *AptlyContext) GetPublishedStorage(name string) aptly.PublishedSto
 // UploadPath builds path to upload storage
 func (context *AptlyContext) UploadPath() string {
 	return filepath.Join(context.Config().RootDir, "upload")
+}
+
+func (context *AptlyContext) pgpProvider() string {
+	var provider string
+
+	if context.globalFlags.IsSet("gpg-provider") {
+		provider = context.globalFlags.Lookup("gpg-provider").Value.String()
+	} else {
+		provider = context.config().GpgProvider
+	}
+
+	if !(provider == "gpg" || provider == "internal") { // nolint: goconst
+		Fatal(fmt.Errorf("unknown gpg provider: %v", provider))
+	}
+
+	return provider
+}
+
+// GetSigner returns Signer with respect to provider
+func (context *AptlyContext) GetSigner() pgp.Signer {
+	context.Lock()
+	defer context.Unlock()
+
+	if context.pgpProvider() == "gpg" { // nolint: goconst
+		return &pgp.GpgSigner{}
+	}
+
+	return &pgp.GoSigner{}
+}
+
+// GetVerifier returns Verifier with respect to provider
+func (context *AptlyContext) GetVerifier() pgp.Verifier {
+	context.Lock()
+	defer context.Unlock()
+
+	if context.pgpProvider() == "gpg" { // nolint: goconst
+		return &pgp.GpgVerifier{}
+	}
+
+	return &pgp.GoVerifier{}
 }
 
 // UpdateFlags sets internal copy of flags in the context
@@ -406,7 +464,6 @@ func (context *AptlyContext) Shutdown() {
 		context.database = nil
 	}
 	if context.downloader != nil {
-		context.downloader.Abort()
 		context.downloader = nil
 	}
 	if context.progress != nil {
@@ -421,7 +478,6 @@ func (context *AptlyContext) Cleanup() {
 	defer context.Unlock()
 
 	if context.downloader != nil {
-		context.downloader.Shutdown()
 		context.downloader = nil
 	}
 	if context.progress != nil {

@@ -30,6 +30,11 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 
 	s.config.RootDir = "/tmp/aptly"
 	s.config.DownloadConcurrency = 5
+	s.config.GpgProvider = "gpg"
+
+	s.config.FileSystemPublishRoots = map[string]FileSystemPublishRoot{"test": {
+		RootDir: "/opt/aptly-publish"}}
+
 	s.config.S3PublishRoots = map[string]S3PublishRoot{"test": {
 		Region: "us-east-1",
 		Bucket: "repo"}}
@@ -57,12 +62,22 @@ func (s *ConfigSuite) TestSaveConfig(c *C) {
 		"  \"dependencyFollowRecommends\": false,\n"+
 		"  \"dependencyFollowAllVariants\": false,\n"+
 		"  \"dependencyFollowSource\": false,\n"+
+		"  \"dependencyVerboseResolve\": false,\n"+
 		"  \"gpgDisableSign\": false,\n"+
 		"  \"gpgDisableVerify\": false,\n"+
+		"  \"gpgProvider\": \"gpg\",\n"+
 		"  \"downloadSourcePackages\": false,\n"+
+		"  \"skipLegacyPool\": false,\n"+
 		"  \"ppaDistributorID\": \"\",\n"+
 		"  \"ppaCodename\": \"\",\n"+
 		"  \"skipContentsPublishing\": false,\n"+
+		"  \"FileSystemPublishEndpoints\": {\n"+
+		"    \"test\": {\n"+
+		"      \"rootDir\": \"/opt/aptly-publish\",\n"+
+		"      \"linkMethod\": \"\",\n"+
+		"      \"verifyMethod\": \"\"\n"+
+		"    }\n"+
+		"  },\n"+
 		"  \"S3PublishEndpoints\": {\n"+
 		"    \"test\": {\n"+
 		"      \"region\": \"us-east-1\",\n"+
