@@ -2,11 +2,11 @@
 aptly
 =====
 
-.. image:: https://travis-ci.org/smira/aptly.png?branch=master
+.. image:: https://api.travis-ci.org/smira/aptly.svg?branch=master
     :target: https://travis-ci.org/smira/aptly
 
-.. image:: https://coveralls.io/repos/smira/aptly/badge.png?branch=HEAD
-    :target: https://coveralls.io/r/smira/aptly?branch=HEAD
+.. image:: https://coveralls.io/repos/smira/aptly/badge.svg?branch=master
+    :target: https://coveralls.io/r/smira/aptly?branch=master
 
 .. image:: https://badges.gitter.im/Join Chat.svg
     :target: https://gitter.im/smira/aptly?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
@@ -19,7 +19,7 @@ Aptly is a swiss army knife for Debian repository management.
 .. image:: http://www.aptly.info/img/aptly_logo.png
     :target: http://www.aptly.info/
 
-Documentation is available at `http://www.aptly.info/ <http://www.aptly.info/>`_. For support use
+Documentation is available at `http://www.aptly.info/ <http://www.aptly.info/>`_. For support please use
 mailing list `aptly-discuss <https://groups.google.com/forum/#!forum/aptly-discuss>`_.
 
 Aptly features: ("+" means planned features)
@@ -42,7 +42,7 @@ Current limitations:
 Download
 --------
 
-To install aptly on Debian/Ubuntu, add new repository to /etc/apt/sources.list::
+To install aptly on Debian/Ubuntu, add new repository to ``/etc/apt/sources.list``::
 
     deb http://repo.aptly.info/ squeeze main
 
@@ -72,6 +72,11 @@ If you have Go environment set up, you can build aptly from source by running (g
     make install
 
 Binary would be installed to ```$GOPATH/bin/aptly``.
+
+Contributing
+------------
+
+Please follow detailed documentation in `CONTRIBUTING.md <CONTRIBUTING.md>`_.
 
 Integrations
 ------------

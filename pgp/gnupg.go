@@ -1,4 +1,4 @@
-package utils
+package pgp
 
 import (
 	"bufio"
@@ -12,60 +12,13 @@ import (
 	"strings"
 )
 
-// Signer interface describes facility implementing signing of files
-type Signer interface {
-	Init() error
-	SetKey(keyRef string)
-	SetKeyRing(keyring, secretKeyring string)
-	SetPassphrase(passphrase, passphraseFile string)
-	SetBatch(batch bool)
-	DetachedSign(source string, destination string) error
-	ClearSign(source string, destination string) error
-}
-
-// Verifier interface describes signature verification factility
-type Verifier interface {
-	InitKeyring() error
-	AddKeyring(keyring string)
-	VerifyDetachedSignature(signature, cleartext io.Reader) error
-	IsClearSigned(clearsigned io.Reader) (bool, error)
-	VerifyClearsigned(clearsigned io.Reader, showKeyTip bool) (*GpgKeyInfo, error)
-	ExtractClearsigned(clearsigned io.Reader) (text *os.File, err error)
-}
-
 // Test interface
 var (
 	_ Signer   = &GpgSigner{}
 	_ Verifier = &GpgVerifier{}
 )
 
-// GpgKey is key in GPG representation
-type GpgKey string
-
-// Matches checks two keys for equality
-func (key1 GpgKey) Matches(key2 GpgKey) bool {
-	if key1 == key2 {
-		return true
-	}
-
-	if len(key1) == 8 && len(key2) == 16 {
-		return key1 == key2[8:]
-	}
-
-	if len(key1) == 16 && len(key2) == 8 {
-		return key1[8:] == key2
-	}
-
-	return false
-}
-
-// GpgKeyInfo is response from signature verification
-type GpgKeyInfo struct {
-	GoodKeys    []GpgKey
-	MissingKeys []GpgKey
-}
-
-// GpgSigner is implementation of Signer interface using gpg
+// GpgSigner is implementation of Signer interface using gpg as external program
 type GpgSigner struct {
 	keyRef                     string
 	keyring, secretKeyring     string
@@ -119,7 +72,7 @@ func (g *GpgSigner) gpgArgs() []string {
 	}
 
 	if g.batch {
-		args = append(args, "--no-tty")
+		args = append(args, "--no-tty", "--batch")
 	}
 
 	return args
@@ -166,7 +119,7 @@ func (g *GpgSigner) ClearSign(source string, destination string) error {
 	return cmd.Run()
 }
 
-// GpgVerifier is implementation of Verifier interface using gpgv
+// GpgVerifier is implementation of Verifier interface using gpgv as external program
 type GpgVerifier struct {
 	keyRings []string
 }
@@ -209,7 +162,7 @@ func (g *GpgVerifier) argsKeyrings() (args []string) {
 	return
 }
 
-func (g *GpgVerifier) runGpgv(args []string, context string, showKeyTip bool) (*GpgKeyInfo, error) {
+func (g *GpgVerifier) runGpgv(args []string, context string, showKeyTip bool) (*KeyInfo, error) {
 	args = append([]string{"--status-fd", "3"}, args...)
 	cmd := exec.Command("gpgv", args...)
 
@@ -250,15 +203,15 @@ func (g *GpgVerifier) runGpgv(args []string, context string, showKeyTip bool) (*
 
 	statusr := bufio.NewScanner(tempf)
 
-	result := &GpgKeyInfo{}
+	result := &KeyInfo{}
 
 	for statusr.Scan() {
 		line := strings.TrimSpace(statusr.Text())
 
 		if strings.HasPrefix(line, "[GNUPG:] GOODSIG ") {
-			result.GoodKeys = append(result.GoodKeys, GpgKey(strings.Fields(line)[2]))
+			result.GoodKeys = append(result.GoodKeys, Key(strings.Fields(line)[2]))
 		} else if strings.HasPrefix(line, "[GNUPG:] NO_PUBKEY ") {
-			result.MissingKeys = append(result.MissingKeys, GpgKey(strings.Fields(line)[2]))
+			result.MissingKeys = append(result.MissingKeys, Key(strings.Fields(line)[2]))
 		}
 	}
 
@@ -288,7 +241,7 @@ func (g *GpgVerifier) runGpgv(args []string, context string, showKeyTip bool) (*
 }
 
 // VerifyDetachedSignature verifies combination of signature and cleartext using gpgv
-func (g *GpgVerifier) VerifyDetachedSignature(signature, cleartext io.Reader) error {
+func (g *GpgVerifier) VerifyDetachedSignature(signature, cleartext io.Reader, showKeyTip bool) error {
 	args := g.argsKeyrings()
 
 	sigf, err := ioutil.TempFile("", "aptly-gpg")
@@ -316,7 +269,7 @@ func (g *GpgVerifier) VerifyDetachedSignature(signature, cleartext io.Reader) er
 	}
 
 	args = append(args, sigf.Name(), clearf.Name())
-	_, err = g.runGpgv(args, "detached signature", true)
+	_, err = g.runGpgv(args, "detached signature", showKeyTip)
 	return err
 }
 
@@ -324,20 +277,16 @@ func (g *GpgVerifier) VerifyDetachedSignature(signature, cleartext io.Reader) er
 func (g *GpgVerifier) IsClearSigned(clearsigned io.Reader) (bool, error) {
 	scanner := bufio.NewScanner(clearsigned)
 	for scanner.Scan() {
-		if strings.Index(scanner.Text(), "BEGIN PGP SIGN") != -1 {
+		if strings.Contains(scanner.Text(), "BEGIN PGP SIGN") {
 			return true, nil
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return false, err
-	}
-
-	return false, nil
+	return false, scanner.Err()
 }
 
 // VerifyClearsigned verifies clearsigned file using gpgv
-func (g *GpgVerifier) VerifyClearsigned(clearsigned io.Reader, showKeyTip bool) (*GpgKeyInfo, error) {
+func (g *GpgVerifier) VerifyClearsigned(clearsigned io.Reader, showKeyTip bool) (*KeyInfo, error) {
 	args := g.argsKeyrings()
 
 	clearf, err := ioutil.TempFile("", "aptly-gpg")

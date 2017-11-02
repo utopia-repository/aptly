@@ -21,9 +21,9 @@ class PublishAPITestRepo(APITest):
 
         d = self.random_name()
         self.check_equal(self.upload("/api/files/" + d,
-                         "libboost-program-options-dev_1.49.0.1_i386.deb", "pyspi_0.6.1-1.3.dsc",
-                         "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
-                         "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
+                                     "libboost-program-options-dev_1.49.0.1_i386.deb", "pyspi_0.6.1-1.3.dsc",
+                                     "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
+                                     "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
 
         self.check_equal(self.post("/api/repos/" + repo_name + "/file/" + d).status_code, 200)
 
@@ -40,6 +40,8 @@ class PublishAPITestRepo(APITest):
             'Distribution': 'wheezy',
             'Label': '',
             'Origin': '',
+            'NotAutomatic': '',
+            'ButAutomaticUpgrades': '',
             'Prefix': prefix,
             'SkipContents': False,
             'SourceKind': 'local',
@@ -74,6 +76,8 @@ class PublishAPITestRepo(APITest):
             'Distribution': distribution,
             'Label': '',
             'Origin': '',
+            'NotAutomatic': '',
+            'ButAutomaticUpgrades': '',
             'Prefix': ".",
             'SkipContents': False,
             'SourceKind': 'local',
@@ -105,9 +109,6 @@ class PublishSnapshotAPITest(APITest):
         snapshot_name = self.random_name()
         self.check_equal(self.post("/api/repos", json={"Name": repo_name}).status_code, 201)
 
-        resp = self.post("/api/repos/" + repo_name + '/snapshots', json={'Name': snapshot_name})
-        self.check_equal(resp.status_code, 400)
-
         d = self.random_name()
         self.check_equal(self.upload("/api/files/" + d,
                          "libboost-program-options-dev_1.49.0.1_i386.deb").status_code, 200)
@@ -123,6 +124,8 @@ class PublishSnapshotAPITest(APITest):
                              "Sources": [{"Name": snapshot_name}],
                              "Signing": DefaultSigningOptions,
                              "Distribution": "squeeze",
+                             "NotAutomatic": "yes",
+                             "ButAutomaticUpgrades": "yes",
                          })
         self.check_equal(resp.status_code, 201)
         self.check_equal(resp.json(), {
@@ -130,6 +133,8 @@ class PublishSnapshotAPITest(APITest):
             'Distribution': 'squeeze',
             'Label': '',
             'Origin': '',
+            'NotAutomatic': 'yes',
+            'ButAutomaticUpgrades': 'yes',
             'Prefix': prefix,
             'SkipContents': False,
             'SourceKind': 'snapshot',
@@ -153,10 +158,11 @@ class PublishUpdateAPITestRepo(APITest):
         self.check_equal(self.post("/api/repos", json={"Name": repo_name, "DefaultDistribution": "wheezy"}).status_code, 201)
 
         d = self.random_name()
-        self.check_equal(self.upload("/api/files/" + d,
-                         "pyspi_0.6.1-1.3.dsc",
-                         "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
-                         "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
+        self.check_equal(
+            self.upload("/api/files/" + d,
+                        "pyspi_0.6.1-1.3.dsc",
+                        "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
+                        "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
         self.check_equal(self.post("/api/repos/" + repo_name + "/file/" + d).status_code, 200)
 
         prefix = self.random_name()
@@ -190,6 +196,8 @@ class PublishUpdateAPITestRepo(APITest):
             'Distribution': 'wheezy',
             'Label': '',
             'Origin': '',
+            'NotAutomatic': '',
+            'ButAutomaticUpgrades': '',
             'Prefix': prefix,
             'SkipContents': False,
             'SourceKind': 'local',
@@ -217,10 +225,11 @@ class PublishSwitchAPITestRepo(APITest):
         self.check_equal(self.post("/api/repos", json={"Name": repo_name, "DefaultDistribution": "wheezy"}).status_code, 201)
 
         d = self.random_name()
-        self.check_equal(self.upload("/api/files/" + d,
-                         "pyspi_0.6.1-1.3.dsc",
-                         "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
-                         "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
+        self.check_equal(
+            self.upload("/api/files/" + d,
+                        "pyspi_0.6.1-1.3.dsc",
+                        "pyspi_0.6.1-1.3.diff.gz", "pyspi_0.6.1.orig.tar.gz",
+                        "pyspi-0.6.1-1.3.stripped.dsc").status_code, 200)
         self.check_equal(self.post("/api/repos/" + repo_name + "/file/" + d).status_code, 200)
 
         snapshot1_name = self.random_name()
@@ -240,6 +249,8 @@ class PublishSwitchAPITestRepo(APITest):
             'Architectures': ['i386', 'source'],
             'Distribution': 'wheezy',
             'Label': '',
+            'NotAutomatic': '',
+            'ButAutomaticUpgrades': '',
             'Origin': '',
             'Prefix': prefix,
             'SkipContents': False,
@@ -273,6 +284,8 @@ class PublishSwitchAPITestRepo(APITest):
             'Distribution': 'wheezy',
             'Label': '',
             'Origin': '',
+            'NotAutomatic': '',
+            'ButAutomaticUpgrades': '',
             'Prefix': prefix,
             'SkipContents': True,
             'SourceKind': 'snapshot',

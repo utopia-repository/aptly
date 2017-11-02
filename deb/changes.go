@@ -2,6 +2,7 @@ package deb
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/smira/aptly/aptly"
+	"github.com/smira/aptly/pgp"
 	"github.com/smira/aptly/utils"
 )
 
@@ -23,7 +25,7 @@ type Changes struct {
 	Binary                []string
 	Architectures         []string
 	Stanza                Stanza
-	SignatureKeys         []utils.GpgKey
+	SignatureKeys         []pgp.Key
 }
 
 // NewChanges moves .changes file into temporary directory and creates Changes structure
@@ -50,7 +52,7 @@ func NewChanges(path string) (*Changes, error) {
 }
 
 // VerifyAndParse does optional signature verification and parses changes files
-func (c *Changes) VerifyAndParse(acceptUnsigned, ignoreSignature bool, verifier utils.Verifier) error {
+func (c *Changes) VerifyAndParse(acceptUnsigned, ignoreSignature bool, verifier pgp.Verifier) error {
 	input, err := os.Open(filepath.Join(c.TempDir, c.ChangesName))
 	if err != nil {
 		return err
@@ -69,7 +71,8 @@ func (c *Changes) VerifyAndParse(acceptUnsigned, ignoreSignature bool, verifier 
 	}
 
 	if isClearSigned && !ignoreSignature {
-		keyInfo, err := verifier.VerifyClearsigned(input, false)
+		var keyInfo *pgp.KeyInfo
+		keyInfo, err = verifier.VerifyClearsigned(input, false)
 		if err != nil {
 			return err
 		}
@@ -78,7 +81,7 @@ func (c *Changes) VerifyAndParse(acceptUnsigned, ignoreSignature bool, verifier 
 		c.SignatureKeys = keyInfo.GoodKeys
 	}
 
-	var text *os.File
+	var text io.ReadCloser
 
 	if isClearSigned {
 		text, err = verifier.ExtractClearsigned(input)
@@ -103,11 +106,7 @@ func (c *Changes) VerifyAndParse(acceptUnsigned, ignoreSignature bool, verifier 
 	c.Architectures = strings.Fields(c.Stanza["Architecture"])
 
 	c.Files, err = c.Files.ParseSumFields(c.Stanza)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Prepare creates temporary directory, copies file there and verifies checksums
@@ -173,7 +172,7 @@ func (c *Changes) PackageQuery() (PackageQuery, error) {
 
 	// if c.Source is empty, this would never match
 	sourceQuery := &AndQuery{
-		L: &FieldQuery{Field: "$PackageType", Relation: VersionEqual, Value: "source"},
+		L: &FieldQuery{Field: "$PackageType", Relation: VersionEqual, Value: ArchitectureSource},
 		R: &FieldQuery{Field: "Name", Relation: VersionEqual, Value: c.Source},
 	}
 
@@ -181,8 +180,7 @@ func (c *Changes) PackageQuery() (PackageQuery, error) {
 	if len(c.Binary) > 0 {
 		binaryQuery = &FieldQuery{Field: "Name", Relation: VersionEqual, Value: c.Binary[0]}
 		// matching debug ddeb packages, they're not present in the Binary field
-		var ddebQuery PackageQuery
-		ddebQuery = &FieldQuery{Field: "Name", Relation: VersionEqual, Value: fmt.Sprintf("%s-dbgsym", c.Binary[0])}
+		var ddebQuery PackageQuery = &FieldQuery{Field: "Name", Relation: VersionEqual, Value: fmt.Sprintf("%s-dbgsym", c.Binary[0])}
 
 		for _, binary := range c.Binary[1:] {
 			binaryQuery = &OrQuery{
@@ -206,7 +204,7 @@ func (c *Changes) PackageQuery() (PackageQuery, error) {
 		}
 
 		binaryQuery = &AndQuery{
-			L: &NotQuery{Q: &FieldQuery{Field: "$PackageType", Relation: VersionEqual, Value: "source"}},
+			L: &NotQuery{Q: &FieldQuery{Field: "$PackageType", Relation: VersionEqual, Value: ArchitectureSource}},
 			R: binaryQuery}
 	}
 

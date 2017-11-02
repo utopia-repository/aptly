@@ -26,7 +26,7 @@ func (s *SnapshotSuite) TestNewSnapshotFromRepository(c *C) {
 	c.Check(snapshot.Name, Equals, "snap1")
 	c.Check(snapshot.NumPackages(), Equals, 3)
 	c.Check(snapshot.RefList().Len(), Equals, 3)
-	c.Check(snapshot.SourceKind, Equals, "repo")
+	c.Check(snapshot.SourceKind, Equals, SourceRemoteRepo)
 	c.Check(snapshot.SourceIDs, DeepEquals, []string{s.repo.UUID})
 
 	s.repo.packageRefs = nil
@@ -37,11 +37,17 @@ func (s *SnapshotSuite) TestNewSnapshotFromRepository(c *C) {
 func (s *SnapshotSuite) TestNewSnapshotFromLocalRepo(c *C) {
 	localRepo := NewLocalRepo("lala", "hoorah!")
 
-	_, err := NewSnapshotFromLocalRepo("snap2", localRepo)
-	c.Check(err, ErrorMatches, "local repo doesn't have packages")
+	snapshot, err := NewSnapshotFromLocalRepo("snap2", localRepo)
+	c.Assert(err, IsNil)
+	c.Check(snapshot.Name, Equals, "snap2")
+	c.Check(snapshot.NumPackages(), Equals, 0)
+	c.Check(snapshot.RefList().Len(), Equals, 0)
+	c.Check(snapshot.SourceKind, Equals, "local")
+	c.Check(snapshot.SourceIDs, DeepEquals, []string{localRepo.UUID})
 
 	localRepo.UpdateRefList(s.reflist)
-	snapshot, _ := NewSnapshotFromLocalRepo("snap1", localRepo)
+	snapshot, err = NewSnapshotFromLocalRepo("snap1", localRepo)
+	c.Assert(err, IsNil)
 	c.Check(snapshot.Name, Equals, "snap1")
 	c.Check(snapshot.NumPackages(), Equals, 3)
 	c.Check(snapshot.RefList().Len(), Equals, 3)
@@ -106,7 +112,7 @@ type SnapshotCollectionSuite struct {
 var _ = Suite(&SnapshotCollectionSuite{})
 
 func (s *SnapshotCollectionSuite) SetUpTest(c *C) {
-	s.db, _ = database.OpenDB(c.MkDir())
+	s.db, _ = database.NewOpenDB(c.MkDir())
 	s.collection = NewSnapshotCollection(s.db)
 	s.SetUpPackages()
 
@@ -132,7 +138,7 @@ func (s *SnapshotCollectionSuite) TearDownTest(c *C) {
 }
 
 func (s *SnapshotCollectionSuite) TestAddByNameByUUID(c *C) {
-	snapshot, err := s.collection.ByName("snap1")
+	_, err := s.collection.ByName("snap1")
 	c.Assert(err, ErrorMatches, "*.not found")
 
 	c.Assert(s.collection.Add(s.snapshot1), IsNil)
@@ -140,7 +146,7 @@ func (s *SnapshotCollectionSuite) TestAddByNameByUUID(c *C) {
 
 	c.Assert(s.collection.Add(s.snapshot2), IsNil)
 
-	snapshot, err = s.collection.ByName("snap1")
+	snapshot, err := s.collection.ByName("snap1")
 	c.Assert(err, IsNil)
 	c.Assert(snapshot.String(), Equals, s.snapshot1.String())
 

@@ -18,7 +18,7 @@ type LocalRepoSuite struct {
 var _ = Suite(&LocalRepoSuite{})
 
 func (s *LocalRepoSuite) SetUpTest(c *C) {
-	s.db, _ = database.OpenDB(c.MkDir())
+	s.db, _ = database.NewOpenDB(c.MkDir())
 	s.list = NewPackageList()
 	s.list.Add(&Package{Name: "lib", Version: "1.7", Architecture: "i386"})
 	s.list.Add(&Package{Name: "app", Version: "1.9", Architecture: "amd64"})
@@ -83,7 +83,7 @@ type LocalRepoCollectionSuite struct {
 var _ = Suite(&LocalRepoCollectionSuite{})
 
 func (s *LocalRepoCollectionSuite) SetUpTest(c *C) {
-	s.db, _ = database.OpenDB(c.MkDir())
+	s.db, _ = database.NewOpenDB(c.MkDir())
 	s.collection = NewLocalRepoCollection(s.db)
 
 	s.list = NewPackageList()
@@ -98,14 +98,14 @@ func (s *LocalRepoCollectionSuite) TearDownTest(c *C) {
 }
 
 func (s *LocalRepoCollectionSuite) TestAddByName(c *C) {
-	r, err := s.collection.ByName("local1")
+	_, err := s.collection.ByName("local1")
 	c.Assert(err, ErrorMatches, "*.not found")
 
 	repo := NewLocalRepo("local1", "Comment 1")
 	c.Assert(s.collection.Add(repo), IsNil)
 	c.Assert(s.collection.Add(repo), ErrorMatches, ".*already exists")
 
-	r, err = s.collection.ByName("local1")
+	r, err := s.collection.ByName("local1")
 	c.Assert(err, IsNil)
 	c.Assert(r.String(), Equals, repo.String())
 
@@ -116,13 +116,13 @@ func (s *LocalRepoCollectionSuite) TestAddByName(c *C) {
 }
 
 func (s *LocalRepoCollectionSuite) TestByUUID(c *C) {
-	r, err := s.collection.ByUUID("some-uuid")
+	_, err := s.collection.ByUUID("some-uuid")
 	c.Assert(err, ErrorMatches, "*.not found")
 
 	repo := NewLocalRepo("local1", "Comment 1")
 	c.Assert(s.collection.Add(repo), IsNil)
 
-	r, err = s.collection.ByUUID(repo.UUID)
+	r, err := s.collection.ByUUID(repo.UUID)
 	c.Assert(err, IsNil)
 	c.Assert(r.String(), Equals, repo.String())
 }
