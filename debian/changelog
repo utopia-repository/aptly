@@ -1,3 +1,10 @@
+aptly (1.1.1-2) unstable; urgency=medium
+
+  * Support both uncompressed control.tar, and xz-compressed
+    control.tar.xz. Thanks to Boyuan Yang for the patch (Closes: 879718)
+
+ -- Sebastien Delafond <seb@debian.org>  Thu, 02 Nov 2017 13:23:29 +0100
+
 aptly (1.1.1-1) unstable; urgency=medium
 
   * New upstream version 1.1.1
