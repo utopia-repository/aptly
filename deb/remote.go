@@ -2,6 +2,7 @@ package deb
 
 import (
 	"bytes"
+	gocontext "context"
 	"fmt"
 	"log"
 	"net/url"
@@ -110,6 +111,12 @@ func NewRemoteRepo(name string, archiveRoot string, distribution string, compone
 	}
 
 	return result, nil
+}
+
+// SetArchiveRoot of remote repo
+func (repo *RemoteRepo) SetArchiveRoot(archiveRoot string) {
+	repo.ArchiveRoot = archiveRoot
+	repo.prepare()
 }
 
 func (repo *RemoteRepo) prepare() error {
@@ -252,13 +259,13 @@ func (repo *RemoteRepo) Fetch(d aptly.Downloader, verifier pgp.Verifier) error {
 
 	if verifier == nil {
 		// 0. Just download release file to temporary URL
-		release, err = http.DownloadTemp(d, repo.ReleaseURL("Release").String())
+		release, err = http.DownloadTemp(gocontext.TODO(), d, repo.ReleaseURL("Release").String())
 		if err != nil {
 			return err
 		}
 	} else {
 		// 1. try InRelease file
-		inrelease, err = http.DownloadTemp(d, repo.ReleaseURL("InRelease").String())
+		inrelease, err = http.DownloadTemp(gocontext.TODO(), d, repo.ReleaseURL("InRelease").String())
 		if err != nil {
 			goto splitsignature
 		}
@@ -280,12 +287,12 @@ func (repo *RemoteRepo) Fetch(d aptly.Downloader, verifier pgp.Verifier) error {
 
 	splitsignature:
 		// 2. try Release + Release.gpg
-		release, err = http.DownloadTemp(d, repo.ReleaseURL("Release").String())
+		release, err = http.DownloadTemp(gocontext.TODO(), d, repo.ReleaseURL("Release").String())
 		if err != nil {
 			return err
 		}
 
-		releasesig, err = http.DownloadTemp(d, repo.ReleaseURL("Release.gpg").String())
+		releasesig, err = http.DownloadTemp(gocontext.TODO(), d, repo.ReleaseURL("Release.gpg").String())
 		if err != nil {
 			return err
 		}
@@ -391,7 +398,10 @@ ok:
 		return err
 	}
 
-	delete(stanza, "SHA512")
+	err = parseSums("SHA512", func(sum *utils.ChecksumInfo, data string) { sum.SHA512 = data })
+	if err != nil {
+		return err
+	}
 
 	repo.Meta = stanza
 
@@ -430,7 +440,7 @@ func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.
 
 	for _, info := range packagesPaths {
 		path, kind := info[0], info[1]
-		packagesReader, packagesFile, err := http.DownloadTryCompression(d, repo.IndexesRootURL(), path, repo.ReleaseFiles, ignoreMismatch, maxTries)
+		packagesReader, packagesFile, err := http.DownloadTryCompression(gocontext.TODO(), d, repo.IndexesRootURL(), path, repo.ReleaseFiles, ignoreMismatch, maxTries)
 		if err != nil {
 			return err
 		}
@@ -592,7 +602,7 @@ func (repo *RemoteRepo) Decode(input []byte) error {
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") {
 			// probably it is broken DB from go < 1.2, try decoding w/o time.Time
-			var repo11 struct {
+			var repo11 struct { // nolint: maligned
 				UUID             string
 				Name             string
 				ArchiveRoot      string
