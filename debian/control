@@ -5,8 +5,8 @@ Maintainer: Sebastien Delafond <seb@debian.org>
 Build-Depends: debhelper (>= 9.0.0), golang-any, golang-go.tools, bash-completion
 Standards-Version: 4.1.1
 Homepage: http://www.aptly.info
-Vcs-Git: https://anonscm.debian.org/git/collab-maint/aptly.git
-Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/aptly.git
+Vcs-Git: https://salsa.debian.org/debian/aptly
+Vcs-Browser: https://salsa.debian.org/debian/aptly
 XS-Go-Import-Path: github.com/smira/aptly
 
 Package: aptly
