@@ -1,3 +1,10 @@
+aptly (1.2.0-3) unstable; urgency=medium
+
+  * Switch to DEP 14
+  * Update Vcs-* to point to salsa.d.o
+
+ -- Sebastien Delafond <seb@debian.org>  Fri, 16 Feb 2018 17:02:25 +0100
+
 aptly (1.2.0-2) unstable; urgency=medium
 
   * Team upload.
