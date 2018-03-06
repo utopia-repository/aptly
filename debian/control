@@ -13,6 +13,7 @@ Package: aptly
 Architecture: any
 Depends: bzip2, xz-utils, gnupg, gpgv, ${shlibs:Depends}, ${misc:Depends}
 Suggests: graphviz
+Built-Using: ${misc:Built-Using}
 Description: Swiss army knife for Debian repository management
  It offers several features making it easy to manage Debian package
  repositories:
