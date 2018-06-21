@@ -5,11 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/database"
+	"github.com/aptly-dev/aptly/deb"
+	"github.com/aptly-dev/aptly/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/database"
-	"github.com/smira/aptly/deb"
-	"github.com/smira/aptly/utils"
 )
 
 // GET /api/repos
@@ -162,8 +162,8 @@ func apiReposDrop(c *gin.Context) {
 // GET /api/repos/:name/packages
 func apiReposPackagesShow(c *gin.Context) {
 	collection := context.CollectionFactory().LocalRepoCollection()
-	collection.RLock()
-	defer collection.RUnlock()
+	collection.Lock()
+	defer collection.Unlock()
 
 	repo, err := collection.ByName(c.Params.ByName("name"))
 	if err != nil {

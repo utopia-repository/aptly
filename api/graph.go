@@ -8,8 +8,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/aptly-dev/aptly/deb"
 	"github.com/gin-gonic/gin"
-	"github.com/smira/aptly/deb"
 )
 
 // GET /api/graph.:ext?layout=[vertical|horizontal(default)]
@@ -24,14 +24,14 @@ func apiGraph(c *gin.Context) {
 
 	factory := context.CollectionFactory()
 
-	factory.RemoteRepoCollection().RLock()
-	defer factory.RemoteRepoCollection().RUnlock()
-	factory.LocalRepoCollection().RLock()
-	defer factory.LocalRepoCollection().RUnlock()
-	factory.SnapshotCollection().RLock()
-	defer factory.SnapshotCollection().RUnlock()
-	factory.PublishedRepoCollection().RLock()
-	defer factory.PublishedRepoCollection().RUnlock()
+	factory.RemoteRepoCollection().Lock()
+	defer factory.RemoteRepoCollection().Unlock()
+	factory.LocalRepoCollection().Lock()
+	defer factory.LocalRepoCollection().Unlock()
+	factory.SnapshotCollection().Lock()
+	defer factory.SnapshotCollection().Unlock()
+	factory.PublishedRepoCollection().Lock()
+	defer factory.PublishedRepoCollection().Unlock()
 
 	graph, err := deb.BuildGraph(factory, layout)
 	if err != nil {

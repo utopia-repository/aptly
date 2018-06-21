@@ -17,10 +17,10 @@ import (
 	"github.com/smira/go-uuid/uuid"
 	"github.com/ugorji/go/codec"
 
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/database"
-	"github.com/smira/aptly/pgp"
-	"github.com/smira/aptly/utils"
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/database"
+	"github.com/aptly-dev/aptly/pgp"
+	"github.com/aptly-dev/aptly/utils"
 )
 
 type repoSourceItem struct {
@@ -315,6 +315,7 @@ func (p *PublishedRepo) MarshalJSON() ([]byte, error) {
 		"Sources":              sources,
 		"Storage":              p.Storage,
 		"SkipContents":         p.SkipContents,
+		"AcquireByHash":        p.AcquireByHash,
 	})
 }
 
@@ -561,6 +562,8 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 
 	indexes := newIndexFiles(publishedStorage, basePath, tempDir, suffix, p.AcquireByHash)
 
+	legacyContentIndexes := map[string]*ContentsIndex{}
+
 	for component, list := range lists {
 		hadUdebs := false
 
@@ -598,21 +601,32 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 				}
 			}
 
+			// Start a db batch. If we fill contents data we'll need
+			// to push each path of the package into the database.
+			// We'll want this batched so as to avoid an excessive
+			// amount of write() calls.
+			tempDB.StartBatch()
+			defer tempDB.FinishBatch()
+
 			for _, arch := range p.Architectures {
 				if pkg.MatchesArchitecture(arch) {
 					var bufWriter *bufio.Writer
 
 					if !p.SkipContents {
 						key := fmt.Sprintf("%s-%v", arch, pkg.IsUdeb)
+						qualifiedName := []byte(pkg.QualifiedName())
+						contents := pkg.Contents(packagePool, progress)
 
-						contentIndex := contentIndexes[key]
+						for _, contentIndexesMap := range []map[string]*ContentsIndex{contentIndexes, legacyContentIndexes} {
+							contentIndex := contentIndexesMap[key]
 
-						if contentIndex == nil {
-							contentIndex = NewContentsIndex(tempDB)
-							contentIndexes[key] = contentIndex
+							if contentIndex == nil {
+								contentIndex = NewContentsIndex(tempDB)
+								contentIndexesMap[key] = contentIndex
+							}
+
+							contentIndex.Push(qualifiedName, contents)
 						}
-
-						contentIndex.Push(pkg, packagePool, progress)
 					}
 
 					bufWriter, err = indexes.PackageIndex(component, arch, pkg.IsUdeb).BufWriter()
@@ -700,6 +714,26 @@ func (p *PublishedRepo) Publish(packagePool aptly.PackagePool, publishedStorageP
 				if err != nil {
 					return fmt.Errorf("unable to create Release file: %s", err)
 				}
+			}
+		}
+	}
+
+	for _, arch := range p.Architectures {
+		for _, udeb := range []bool{true, false} {
+			index := legacyContentIndexes[fmt.Sprintf("%s-%v", arch, udeb)]
+			if index == nil || index.Empty() {
+				continue
+			}
+
+			var bufWriter *bufio.Writer
+			bufWriter, err = indexes.LegacyContentsIndex(arch, udeb).BufWriter()
+			if err != nil {
+				return fmt.Errorf("unable to generate contents index: %v", err)
+			}
+
+			_, err = index.WriteTo(bufWriter)
+			if err != nil {
+				return fmt.Errorf("unable to generate contents index: %v", err)
 			}
 		}
 	}

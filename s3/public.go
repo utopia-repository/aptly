@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/corehandlers"
@@ -15,10 +17,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/pkg/errors"
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/utils"
 	"github.com/smira/go-aws-auth"
 )
+
+const errCodeNotFound = "NotFound"
 
 // PublishedStorage abstract file system with published files (actually hosted on S3)
 type PublishedStorage struct {
@@ -391,7 +393,7 @@ func (storage *PublishedStorage) SymLink(src string, dst string) error {
 
 	params := &s3.CopyObjectInput{
 		Bucket:     aws.String(storage.bucket),
-		CopySource: aws.String(filepath.Join(storage.prefix, src)),
+		CopySource: aws.String(filepath.Join(storage.bucket, storage.prefix, src)),
 		Key:        aws.String(filepath.Join(storage.prefix, dst)),
 		ACL:        aws.String(storage.acl),
 		Metadata: map[string]*string{
@@ -429,7 +431,7 @@ func (storage *PublishedStorage) FileExists(path string) (bool, error) {
 	_, err := storage.s3.HeadObject(params)
 	if err != nil {
 		aerr, ok := err.(awserr.Error)
-		if ok && aerr.Code() == s3.ErrCodeNoSuchKey {
+		if ok && aerr.Code() == errCodeNotFound {
 			return false, nil
 		}
 

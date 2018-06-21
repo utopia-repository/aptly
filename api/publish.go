@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aptly-dev/aptly/deb"
+	"github.com/aptly-dev/aptly/pgp"
+	"github.com/aptly-dev/aptly/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/smira/aptly/deb"
-	"github.com/smira/aptly/pgp"
-	"github.com/smira/aptly/utils"
 )
 
 // SigningOptions is a shared between publish API GPG options structure
@@ -60,8 +60,8 @@ func apiPublishList(c *gin.Context) {
 	defer snapshotCollection.RUnlock()
 
 	collection := context.CollectionFactory().PublishedRepoCollection()
-	collection.RLock()
-	defer collection.RUnlock()
+	collection.Lock()
+	defer collection.Unlock()
 
 	result := make([]*deb.PublishedRepo, 0, collection.Len())
 
@@ -104,6 +104,7 @@ func apiPublishRepoOrSnapshot(c *gin.Context) {
 		SkipContents         *bool
 		Architectures        []string
 		Signing              SigningOptions
+		AcquireByHash        *bool
 	}
 
 	if c.Bind(&b) != nil {
@@ -128,8 +129,8 @@ func apiPublishRepoOrSnapshot(c *gin.Context) {
 		var snapshot *deb.Snapshot
 
 		snapshotCollection := context.CollectionFactory().SnapshotCollection()
-		snapshotCollection.RLock()
-		defer snapshotCollection.RUnlock()
+		snapshotCollection.Lock()
+		defer snapshotCollection.Unlock()
 
 		for _, source := range b.Sources {
 			components = append(components, source.Component)
@@ -152,8 +153,8 @@ func apiPublishRepoOrSnapshot(c *gin.Context) {
 		var localRepo *deb.LocalRepo
 
 		localCollection := context.CollectionFactory().LocalRepoCollection()
-		localCollection.RLock()
-		defer localCollection.RUnlock()
+		localCollection.Lock()
+		defer localCollection.Unlock()
 
 		for _, source := range b.Sources {
 			components = append(components, source.Component)
@@ -199,6 +200,10 @@ func apiPublishRepoOrSnapshot(c *gin.Context) {
 	published.SkipContents = context.Config().SkipContentsPublishing
 	if b.SkipContents != nil {
 		published.SkipContents = *b.SkipContents
+	}
+
+	if b.AcquireByHash != nil {
+		published.AcquireByHash = *b.AcquireByHash
 	}
 
 	duplicate := collection.CheckDuplicate(published)
@@ -253,12 +258,12 @@ func apiPublishUpdateSwitch(c *gin.Context) {
 
 	// published.LoadComplete would touch local repo collection
 	localRepoCollection := context.CollectionFactory().LocalRepoCollection()
-	localRepoCollection.RLock()
-	defer localRepoCollection.RUnlock()
+	localRepoCollection.Lock()
+	defer localRepoCollection.Unlock()
 
 	snapshotCollection := context.CollectionFactory().SnapshotCollection()
-	snapshotCollection.RLock()
-	defer snapshotCollection.RUnlock()
+	snapshotCollection.Lock()
+	defer snapshotCollection.Unlock()
 
 	collection := context.CollectionFactory().PublishedRepoCollection()
 	collection.Lock()
@@ -357,8 +362,8 @@ func apiPublishDrop(c *gin.Context) {
 
 	// published.LoadComplete would touch local repo collection
 	localRepoCollection := context.CollectionFactory().LocalRepoCollection()
-	localRepoCollection.RLock()
-	defer localRepoCollection.RUnlock()
+	localRepoCollection.Lock()
+	defer localRepoCollection.Unlock()
 
 	collection := context.CollectionFactory().PublishedRepoCollection()
 	collection.Lock()
