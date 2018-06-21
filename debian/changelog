@@ -1,3 +1,12 @@
+aptly (1.2.0-5) UNRELEASED; urgency=medium
+
+  * Team upload.
+  * Switch to dh-golang. (Closes: #902038)
+  * Fix vcs-field-not-canonical.
+  * Fix insecure-copyright-format-uri.
+
+ -- Alexandre Viau <aviau@debian.org>  Thu, 21 Jun 2018 14:55:25 -0400
+
 aptly (1.2.0-4) unstable; urgency=medium
 
   * Enable Built-Using in debian/control (thanks M. Staperberg)
