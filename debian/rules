@@ -6,7 +6,7 @@
 
 # DH_GOPKG is the upstream path which you would normally “go get”.
 # Using it allows us to build applications without patching locations.
-export DH_GOPKG := github.com/smira/aptly
+export DH_GOPKG := github.com/aptly-dev/aptly
 
 # our path
 SOURCE_DIR := $(CURDIR)
@@ -24,9 +24,9 @@ override_dh_auto_clean:
 override_dh_auto_build:
 
 override_dh_auto_install:
-	mkdir -p $(CURDIR)/src/github.com/smira/
-	ln -sf ../../../ $(CURDIR)/src/github.com/smira/aptly
-	ls -l $(CURDIR)/src/github.com/smira/aptly/
+	mkdir -p $(CURDIR)/src/github.com/aptly-dev
+	ln -sf ../../../ $(CURDIR)/src/github.com/aptly-dev/aptly
+	ls -l $(CURDIR)/src/github.com/aptly-dev/aptly/
 	GOBIN=$(CURDIR) GOPATH=$(CURDIR):$(SOURCE_DIR)/vendor go install -v $(SOURCE_DIR)/main.go
 	dh_bash-completion
 	mkdir -p $(DEST_DIR)/usr/bin

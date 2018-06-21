@@ -7,7 +7,7 @@ Standards-Version: 4.1.1
 Homepage: http://www.aptly.info
 Vcs-Git: https://salsa.debian.org/debian/aptly
 Vcs-Browser: https://salsa.debian.org/debian/aptly
-XS-Go-Import-Path: github.com/smira/aptly
+XS-Go-Import-Path: github.com/aptly-dev/aptly
 
 Package: aptly
 Architecture: any
