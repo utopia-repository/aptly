@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/utils"
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/utils"
 
 	. "gopkg.in/check.v1"
 )
@@ -129,6 +129,10 @@ func (s *PublishedStorageSuite) TestSymLink(c *C) {
 
 	exists, _ := s.storage.FileExists("ppa/dists/squeeze/InRelease")
 	c.Check(exists, Equals, true)
+
+	linkTarget, err := s.storage.ReadLink("ppa/dists/squeeze/InRelease")
+	c.Assert(err, IsNil)
+	c.Assert(linkTarget, Equals, "ppa/dists/squeeze/Release")
 }
 
 func (s *PublishedStorageSuite) TestHardLink(c *C) {
@@ -315,4 +319,20 @@ func (s *PublishedStorageSuite) TestLinkFromPool(c *C) {
 	// Test using copy with size verification (this will NOT detect the difference)
 	err = s.storageCopySize.LinkFromPool(filepath.Join("", "pool", "main", "m/mars-invaders"), "mars-invaders_1.03.deb", pool, srcPoolPath, sourceChecksum, false)
 	c.Check(err, IsNil)
+}
+
+func (s *PublishedStorageSuite) TestRootRemove(c *C) {
+	// Prevent deletion of the root directory by passing empty subpaths.
+
+	pwd := c.MkDir()
+
+	// Symlink
+	linkedDir := filepath.Join(pwd, "linkedDir")
+	os.Symlink(s.root, linkedDir)
+	linkStorage := NewPublishedStorage(linkedDir, "", "")
+	c.Assert(func() { linkStorage.Remove("") }, PanicMatches, "trying to remove empty path")
+
+	// Actual dir
+	dirStorage := NewPublishedStorage(pwd, "", "")
+	c.Assert(func() { dirStorage.RemoveDirs("", nil) }, PanicMatches, "trying to remove the root directory")
 }

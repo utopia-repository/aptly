@@ -15,7 +15,7 @@ Please report unacceptable behavior to [team@aptly.info](mailto:team@aptly.info)
 
 ### List of Repositories
 
-* [smira/aptly](https://github.com/smira/aptly) - aptly source code, functional tests, man page
+* [aptly-dev/aptly](https://github.com/aptly-dev/aptly) - aptly source code, functional tests, man page
 * [apty-dev/aptly-dev.github.io](https://github.com/aptly-dev/aptly-dev.github.io) - aptly website (https://www.aptly.info/)
 * [aptly-dev/aptly-fixture-db](https://github.com/aptly-dev/aptly-fixture-db) & [aptly-dev/aptly-fixture-pool](https://github.com/aptly-dev/aptly-fixture-pool) provide
   fixtures for aptly functional tests
@@ -24,15 +24,15 @@ Please report unacceptable behavior to [team@aptly.info](mailto:team@aptly.info)
 
 ### Reporting Bugs
 
-1. Please search for similar bug report in [issue tracker](https://github.com/smira/aptly/issues)
+1. Please search for similar bug report in [issue tracker](https://github.com/aptly-dev/aptly/issues)
 2. Please verify that bug is not fixed in latest aptly nightly ([download information](https://www.aptly.info/download/))
 3. Steps to reproduce increases chances for bug to be fixed quickly. If possible, submit PR with new functional test which fails.
 4. If bug is reproducible with specific package, please provide link to package file.
-5. Open issue at [GitHub](https://github.com/smira/aptly/issues)
+5. Open issue at [GitHub](https://github.com/aptly-dev/aptly/issues)
 
 ### Suggesting Enhancements
 
-1. Please search [issue tracker](https://github.com/smira/aptly/issues) for similar feature requests.
+1. Please search [issue tracker](https://github.com/aptly-dev/aptly/issues) for similar feature requests.
 2. Describe why enhancement is important to you.
 3. Include any additional details or implementation details.
 
@@ -45,7 +45,7 @@ There are two kinds of documentation:
 
 Core content is mostly the same, but website contains more information, tutorials, examples.
 
-If you want to update `man` page, please open PR to [main aptly repo](https://github.com/smira/aptly),
+If you want to update `man` page, please open PR to [main aptly repo](https://github.com/aptly-dev/aptly),
 details in [man page](#man-page) section.
 
 If you want to update website, please follow steps below:
@@ -88,7 +88,7 @@ As Go is using repository path in import paths, it's better to clone aptly repo 
 
     mkdir -p ~/go/src/github.com/smira
     cd ~/go/src/github.com/smira
-    git clone git@github.com:smira/aptly.git
+    git clone git@github.com:aptly-dev/aptly.git
     cd aptly
 
 For main repo under your GitHub user and add it as another Git remote:
@@ -206,12 +206,13 @@ template [man/aptly.1.ronn.tmpl](man/aptly.1.ronn.tmpl) is changed or any comman
 final rendered man page [man/aptly.1](man/aptly.1). In the end of the build, new man page is displayed for visual
 verification.
 
-Man page is built with small helper [_man/gen.go](man/gen.go) which pulls in template, command-line help from [cmd/](cmd/) folder
+Man page is built with small helper [\_man/gen.go](man/gen.go) which pulls in template, command-line help from [cmd/](cmd/) folder
 and runs that through [forked copy](https://github.com/smira/ronn) of [ronn](https://github.com/rtomayko/ronn).
 
-### Bash Completion
+### Bash and Zsh Completion
 
-Bash completion for aptly resides in the same repo under in [bash_completion.d/aptly](bash_completion.d/aptly). It's all hand-crafted.
+Bash and Zsh completion for aptly reside in the same repo under in [completion.d/aptly](completion.d/aptly) and
+[completion.d/\_aptly](completion.d/_aptly), respectively. It's all hand-crafted.
 When new option or command is introduced, bash completion should be updated to reflect that change.
 
 When aptly package is being built, it automatically pulls bash completion and man page into the package.

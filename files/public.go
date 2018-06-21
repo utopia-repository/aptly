@@ -8,8 +8,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/utils"
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/utils"
 )
 
 // PublishedStorage abstract file system with public dirs (published repos)
@@ -97,12 +97,18 @@ func (storage *PublishedStorage) PutFile(path string, sourceFilename string) err
 
 // Remove removes single file under public path
 func (storage *PublishedStorage) Remove(path string) error {
+	if len(path) <= 0 {
+		panic("trying to remove empty path")
+	}
 	filepath := filepath.Join(storage.rootPath, path)
 	return os.Remove(filepath)
 }
 
 // RemoveDirs removes directory structure under public path
 func (storage *PublishedStorage) RemoveDirs(path string, progress aptly.Progress) error {
+	if len(path) <= 0 {
+		panic("trying to remove the root directory")
+	}
 	filepath := filepath.Join(storage.rootPath, path)
 	if progress != nil {
 		progress.Printf("Removing %s...\n", filepath)
@@ -267,7 +273,12 @@ func (storage *PublishedStorage) FileExists(path string) (bool, error) {
 	return true, nil
 }
 
-// ReadLink returns the symbolic link pointed to by path
+// ReadLink returns the symbolic link pointed to by path (relative to storage
+// root)
 func (storage *PublishedStorage) ReadLink(path string) (string, error) {
-	return os.Readlink(path)
+	absPath, err := os.Readlink(filepath.Join(storage.rootPath, path))
+	if err != nil {
+		return absPath, err
+	}
+	return filepath.Rel(storage.rootPath, absPath)
 }

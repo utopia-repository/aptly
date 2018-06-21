@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/smira/aptly/aptly"
-	"github.com/smira/aptly/pgp"
-	"github.com/smira/aptly/utils"
+	"github.com/aptly-dev/aptly/aptly"
+	"github.com/aptly-dev/aptly/pgp"
+	"github.com/aptly-dev/aptly/utils"
 )
 
 type indexFiles struct {
@@ -191,18 +191,22 @@ func packageIndexByHash(file *indexFile, ext string, hash string, sum string) er
 	}
 
 	// if a previous index file already exists exists, backup symlink
-	if exists, _ = file.parent.publishedStorage.FileExists(filepath.Join(dst, indexfile)); exists {
+	indexPath := filepath.Join(dst, indexfile)
+	oldIndexPath := filepath.Join(dst, indexfile+".old")
+	if exists, _ = file.parent.publishedStorage.FileExists(indexPath); exists {
 		// if exists, remove old symlink
-		if exists, _ = file.parent.publishedStorage.FileExists(filepath.Join(dst, indexfile+".old")); exists {
-			var link string
-			link, err = file.parent.publishedStorage.ReadLink(filepath.Join(dst, indexfile+".old"))
-			if err != nil {
-				file.parent.publishedStorage.Remove(link)
+		if exists, _ = file.parent.publishedStorage.FileExists(oldIndexPath); exists {
+			var linkTarget string
+			linkTarget, err = file.parent.publishedStorage.ReadLink(oldIndexPath)
+			if err == nil {
+				// If we managed to resolve the link target: delete it. This is the
+				// oldest physical index file we no longer need. Once we drop our
+				// old symlink we'll essentially forget about it existing at all.
+				file.parent.publishedStorage.Remove(linkTarget)
 			}
-			file.parent.publishedStorage.Remove(filepath.Join(dst, indexfile+".old"))
+			file.parent.publishedStorage.Remove(oldIndexPath)
 		}
-		file.parent.publishedStorage.RenameFile(filepath.Join(dst, indexfile),
-			filepath.Join(dst, indexfile+".old"))
+		file.parent.publishedStorage.RenameFile(indexPath, oldIndexPath)
 	}
 
 	// create symlink
@@ -307,6 +311,37 @@ func (files *indexFiles) ContentsIndex(component, arch string, udeb bool) *index
 			relativePath = filepath.Join(component, fmt.Sprintf("Contents-udeb-%s", arch))
 		} else {
 			relativePath = filepath.Join(component, fmt.Sprintf("Contents-%s", arch))
+		}
+
+		file = &indexFile{
+			parent:        files,
+			discardable:   true,
+			compressable:  true,
+			onlyGzip:      true,
+			signable:      false,
+			acquireByHash: files.acquireByHash,
+			relativePath:  relativePath,
+		}
+
+		files.indexes[key] = file
+	}
+
+	return file
+}
+
+func (files *indexFiles) LegacyContentsIndex(arch string, udeb bool) *indexFile {
+	if arch == ArchitectureSource {
+		udeb = false
+	}
+	key := fmt.Sprintf("lci-%s-%v", arch, udeb)
+	file, ok := files.indexes[key]
+	if !ok {
+		var relativePath string
+
+		if udeb {
+			relativePath = fmt.Sprintf("Contents-udeb-%s", arch)
+		} else {
+			relativePath = fmt.Sprintf("Contents-%s", arch)
 		}
 
 		file = &indexFile{
