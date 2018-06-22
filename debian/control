@@ -2,7 +2,8 @@ Source: aptly
 Section: utils
 Priority: optional
 Maintainer: Sebastien Delafond <seb@debian.org>
-Build-Depends: debhelper (>= 9.0.0),
+Uploaders: Alexandre Viau <aviau@debian.org>
+Build-Depends: debhelper (>= 11),
                dh-golang,
                golang-any,
                golang-go.tools,
@@ -19,7 +20,7 @@ Architecture: any
 Depends: bzip2, xz-utils, gnupg, gpgv, ${shlibs:Depends}, ${misc:Depends}
 Suggests: graphviz
 Built-Using: ${misc:Built-Using}
-Description: Swiss army knife for Debian repository management
+Description: Swiss army knife for Debian repository management - main package
  It offers several features making it easy to manage Debian package
  repositories:
  .
@@ -31,3 +32,24 @@ Description: Swiss army knife for Debian repository management
   - controlled update of one or more packages in snapshot from upstream
     mirror, tracking dependencies
   - merge two or more snapshots into one
+ .
+ This is the main package, it contains the aptly command-line utility.
+
+Package: aptly-api
+Architecture: any
+Depends: ${misc:Depends}, aptly, adduser
+Built-Using: ${misc:Built-Using}
+Description: Swiss army knife for Debian repository management - API
+ It offers several features making it easy to manage Debian package
+ repositories:
+ .
+  - make mirrors of remote Debian/Ubuntu repositories, limiting by
+    components/architectures
+  - take snapshots of mirrors at any point in time, fixing state of
+    repository at some moment of time
+  - publish snapshot as Debian repository, ready to be consumed by apt
+  - controlled update of one or more packages in snapshot from upstream
+    mirror, tracking dependencies
+  - merge two or more snapshots into one
+ .
+ This package contains the aptly-api service.
