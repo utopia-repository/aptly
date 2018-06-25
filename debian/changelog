@@ -1,4 +1,4 @@
-aptly (1.3.0-3) UNRELEASED; urgency=medium
+aptly (1.3.0-3) unstable; urgency=medium
 
   * Create aptly-api package. (Closes: #902032)
 
