@@ -1,3 +1,13 @@
+aptly (1.3.0-4) unstable; urgency=medium
+
+  * Document #902128 in debian/copyright
+  * Point debian/watch to new git repo on GitHub
+  * Add simple autopkgtest
+  * Add debian/.gitlab-ci.yml
+  * Depend on gnupg1 (Closes: #902419)
+
+ -- Sebastien Delafond <seb@debian.org>  Tue, 26 Jun 2018 14:24:34 +0200
+
 aptly (1.3.0-3) unstable; urgency=medium
 
   * Create aptly-api package. (Closes: #902032)
