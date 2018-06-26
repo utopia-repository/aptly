@@ -1,0 +1,2 @@
+
+Test-Command: aptly repo create autopkgtest && aptly repo add autopkgtest /var/cache/apt/archives/*.deb
