@@ -17,7 +17,7 @@ Testsuite: autopkgtest-pkg-go
 
 Package: aptly
 Architecture: any
-Depends: bzip2, xz-utils, gnupg, gpgv, ${shlibs:Depends}, ${misc:Depends}
+Depends: bzip2, xz-utils, gnupg1, gpgv, ${shlibs:Depends}, ${misc:Depends}
 Suggests: graphviz
 Built-Using: ${misc:Built-Using}
 Description: Swiss army knife for Debian repository management - main package
