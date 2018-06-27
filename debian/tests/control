@@ -3,3 +3,4 @@ Depends: @, @builddeps@, dh-golang
 Restrictions: allow-stderr
 
 Test-Command: aptly repo create autopkgtest
+Restrictions: allow-stderr
