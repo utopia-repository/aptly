@@ -13,6 +13,7 @@ Homepage: http://www.aptly.info
 Vcs-Git: https://salsa.debian.org/debian/aptly.git
 Vcs-Browser: https://salsa.debian.org/debian/aptly
 XS-Go-Import-Path: github.com/aptly-dev/aptly
+Testsuite: autopkgtest-pkg-go
 
 Package: aptly
 Architecture: any

@@ -1,0 +1,8 @@
+# This file is an addition to the autodep8 tests.
+#
+# See autodep8(1):
+# > If `debian/tests/control.autodep8` exists, autodep8
+# > will prepend the contents of that file to its own output.
+
+Test-Command: aptly repo create autopkgtest
+Restrictions: allow-stderr
