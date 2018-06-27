@@ -1,2 +1,5 @@
+Test-Command: /usr/bin/dh_golang_autopkgtest
+Depends: @, @builddeps@, dh-golang
+Restrictions: allow-stderr
 
 Test-Command: aptly repo create autopkgtest && aptly repo add autopkgtest /var/cache/apt/archives/*.deb
