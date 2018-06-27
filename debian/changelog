@@ -1,9 +1,9 @@
-aptly (1.3.0-5) UNRELEASED; urgency=medium
+aptly (1.3.0-5) unstable; urgency=medium
 
   * Fix syntax-error-in-dep5-copyright.
   * Fix unnecessary-testsuite-autopkgtest-field.
 
- -- Alexandre Viau <aviau@debian.org>  Tue, 26 Jun 2018 22:10:39 -0400
+ -- Alexandre Viau <aviau@debian.org>  Tue, 26 Jun 2018 23:01:36 -0400
 
 aptly (1.3.0-4) unstable; urgency=medium
 
