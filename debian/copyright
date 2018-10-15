@@ -5,196 +5,34 @@ Files-Excluded: vendor/*
 
 Files: *
 Copyright: 2014 Andrey Smirnov <me@smira.ru>
-License: MIT
+License: Expat
 Comment: Some of aptly's vendored dependencies are already in Debian, and
  Alexandre Viau is well on his way to packaging the rest of them so that
  aptly can properly depend on the corresponding Debian packages
  (see https://bugs.debian.org/902128).
 
-Files: vendor/github.com/awalterschulze/gographviz/*
-Copyright: 2013 GoGraphviz Authors
-License: Apache-2
-
-Files: vendor/github.com/syndtr/goleveldb/*
-Copyright: 2012 Suryandaru Triandana
-License: BSD-2-clause
-
-Files: vendor/gopkg.in/check.v1/*
-Copyright: 2010-2013 Gustavo Niemeyer <gustavo@niemeyer.net>
-License: BSD-2-clause
-
-Files: vendor/github.com/pkg/errors/*
-Copyright: 2015 Dave Cheney <dave@cheney.net>
-License: BSD-2-clause
-
-Files: vendor/github.com/syndtr/goleveldb/leveldb/journal/journal*.go
-Copyright: 2011 The LevelDB-Go Authors
-License: BSD-3-clause
-
-Files: vendor/github.com/syndtr/goleveldb/leveldb/util/buffer*.go
-Copyright: 2009 The Go Authors
-License: BSD-3-clause
-
-Files: vendor/golang.org/x/crypto/* vendor/github.com/smira/flag/* vendor/github.com/awalterschulze/gographviz/scanner/scanner.go
-Copyright: 2009 The Go Authors
-License: BSD-3-clause
-
-Files: vendor/golang.org/x/sys/*
-Copyright: 2009 The Go Authors
-License: BSD-3-clause
-
-Files: vendor/github.com/smira/go-uuid/uuid/*
-Copyright: 2009 Google Inc.
-License: BSD-3-clause
-
-Files: vendor/github.com/smira/go-uuid/lib/codereview/codereview.py
-Copyright: 2009 Google
-License: Apache-2
-
-Files: vendor/github.com/aws/aws-sdk-go/* vendor/github.com/go-ini/*
-Copyright: 2014 Unknown
-License: Apache-2
-
-Files: vendor/github.com/jmespath/go-jmespath/*
-Copyright: 2015 James Saryerwinnie
-License: Apache-2
-
-Files: vendor/github.com/golang/snappy/*
-Copyright: 2011 The Snappy-Go Authors
-License: BSD-3-clause
-
-Files: vendor/github.com/mattn/go-shellwords/*
-Copyright: 2013-2014 Yasuhiro Matsumoto
-License: MIT
-
-Files: vendor/github.com/smira/go-aws-auth/*
-Copyright: 2013 SmartyStreets
-License: MIT
-
-Files: vendor/github.com/smira/commander/*
-Copyright: 2012 The Go-Commander Authors
-License: BSD-3-clause
-
-Files: vendor/github.com/smira/lzma/*
-Copyright: 2010 Andrei Vieru
-License: BSD-3-clause
-
-Files: vendor/github.com/cheggaaa/pb/*
-Copyright: 2012-2015, Sergey Cherepanov
-License: BSD-3-clause
-
-Files: vendor/github.com/mkrautz/goar/*
-Copyright: 2011 Mikkel Krautz
-License: BSD-3-clause
-
-Files: vendor/github.com/ugorji/go/*
-Copyright: 2012, 2013 Ugorji Nwoke
-License: BSD-3-clause
-
-Files: vendor/github.com/wsxiaoys/terminal/*
-Copyright: 2013 Meng Zhang
-License: BSD-3-clause
-
-Files: vendor/github.com/mxk/*
-Copyright: 2013 Maxim Khitrov
-License: BSD-3-clause
-
-Files: vendor/github.com/DisposaBoy/JsonConfigReader/*
-Copyright: 2012 The JsonConfigReader Authors
-License: MIT
-
-Files: vendor/github.com/gin-gonic/gin/*
-Copyright: 2014 Manuel Martínez-Almeida
-License: MIT
-
-Files: vendor/github.com/jlaffaye/ftp/*
-Copyright: 2011-2013, Julien Laffaye <jlaffaye@FreeBSD.org>
-License: ISC
-
-Files: vendor/github.com/julienschmidt/httprouter/*
-Copyright: 2013 Julien Schmidt
-License: BSD-3-clause
-
-Files: vendor/github.com/ncw/swift/*
-Copyright: 2012 Nick Craig-Wood
-License: MIT
-
-Files: vendor/github.com/AlekSi/pointer/*
-Copyright: 2015 Alexey Palazhchenko
-License: MIT
-
-Files: vendor/github.com/h2non/filetype/*
-Copyright: Tomas Aparicio
-License: MIT
-
-Files: vendor/gopkg.in/h2non/filetype.v1/*
-Copyright: Tomas Aparicio
-License: MIT
-
-Files: vendor/github.com/mattn/go-runewidth/*
-Copyright: 2016 Yasuhiro Matsumoto
-License: MIT
-
 Files: debian/*
 Copyright: 2014 Sebastien Delafond <seb@debian.org>
 License: GPL-2+
- See /usr/share/common-licenses/GPL-2
 
-License: BSD-2-clause
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions
- are met:
+License: GPL-2+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 2 of the License, or
+ (at your option) any later version.
  .
- 1) Redistributions of source code must retain the above copyright
- notice, this list of conditions and the following disclaimer.
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
  .
- 2) Redistributions in binary form must reproduce the above copyright
- notice, this list of conditions and the following disclaimer in the
- documentation and/or other materials provided with the distribution.
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
  .
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
- WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- POSSIBILITY OF SUCH DAMAGE.
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
 
-License: BSD-3-clause
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions
- are met:
- .
- 1) Redistributions of source code must retain the above copyright
- notice, this list of conditions and the following disclaimer.
- .
- 2) Redistributions in binary form must reproduce the above copyright
- notice, this list of conditions and the following disclaimer in the
- documentation and/or other materials provided with the distribution.
- .
- 3) Neither the name of the ORGANIZATION nor the names of its
- contributors may be used to endorse or promote products derived from
- this software without specific prior written permission.
- .
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
- WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- POSSIBILITY OF SUCH DAMAGE.
-
-License: MIT
+License: Expat
  Permission is hereby granted, free of charge, to any person obtaining
  a copy of this software and associated documentation files (the
  "Software"), to deal in the Software without restriction, including
@@ -214,21 +52,3 @@ License: MIT
  ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
-
-License: ISC
- Permission to use, copy, modify, and/or distribute this software for
- any purpose with or without fee is hereby granted, provided that the
- above copyright notice and this permission notice appear in all
- copies.
- .
- THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- PERFORMANCE OF THIS SOFTWARE.
-
-License: Apache-2
- See: /usr/share/common-licenses/Apache-2.0
