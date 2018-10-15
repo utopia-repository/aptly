@@ -1,0 +1,15 @@
+Description: Use Debian's lzma package.
+Author: Alexandre Viau <aviau@debian.org>
+Applied-Upstream: https://github.com/aptly-dev/aptly/commit/7dfc12d138160e0a29d6157fb90ef1ed920064b0
+
+--- a/deb/deb.go
++++ b/deb/deb.go
+@@ -16,7 +16,7 @@
+ 
+ 	"github.com/aptly-dev/aptly/pgp"
+ 	"github.com/smira/go-xz"
+-	"github.com/smira/lzma"
++	"github.com/kjk/lzma"
+ )
+ 
+ // Source kinds

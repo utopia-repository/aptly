@@ -1,0 +1,70 @@
+Description: Use Debian's uuid package.
+Author: Alexandre Viau <aviau@debian.org>
+Applied-Upstream: https://github.com/aptly-dev/aptly/commit/814ac6c28c5d374d16f3177af4f2eb3eaa1811f7
+
+--- a/deb/contents.go
++++ b/deb/contents.go
+@@ -7,7 +7,7 @@
+ 	"io"
+ 
+ 	"github.com/aptly-dev/aptly/database"
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ )
+ 
+ // ContentsIndex calculates mapping from files to packages, with sorting and aggregation
+--- a/deb/local.go
++++ b/deb/local.go
+@@ -7,7 +7,7 @@
+ 	"sync"
+ 
+ 	"github.com/aptly-dev/aptly/database"
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ 	"github.com/ugorji/go/codec"
+ )
+ 
+--- a/deb/publish.go
++++ b/deb/publish.go
+@@ -14,7 +14,7 @@
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ 	"github.com/ugorji/go/codec"
+ 
+ 	"github.com/aptly-dev/aptly/aptly"
+--- a/deb/remote.go
++++ b/deb/remote.go
+@@ -20,7 +20,7 @@
+ 	"github.com/aptly-dev/aptly/http"
+ 	"github.com/aptly-dev/aptly/pgp"
+ 	"github.com/aptly-dev/aptly/utils"
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ 	"github.com/ugorji/go/codec"
+ )
+ 
+--- a/deb/snapshot.go
++++ b/deb/snapshot.go
+@@ -12,7 +12,7 @@
+ 
+ 	"github.com/aptly-dev/aptly/database"
+ 	"github.com/aptly-dev/aptly/utils"
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ 	"github.com/ugorji/go/codec"
+ )
+ 
+--- a/files/package_pool.go
++++ b/files/package_pool.go
+@@ -9,7 +9,7 @@
+ 	"sync"
+ 	"syscall"
+ 
+-	"github.com/smira/go-uuid/uuid"
++	"github.com/pborman/uuid"
+ 
+ 	"github.com/aptly-dev/aptly/aptly"
+ 	"github.com/aptly-dev/aptly/utils"
