@@ -8,6 +8,7 @@ aptly (1.3.0-7) UNRELEASED; urgency=medium
   * d/copyright: ignore vendor/*.
   * d/copyright: remove vendor/* sections.
   * d/copyright: MIT -> Expat.
+  * d/control: add vendor/* build dependencies.
 
  -- Ondřej Nový <onovy@debian.org>  Mon, 01 Oct 2018 10:22:55 +0200
 
