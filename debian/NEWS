@@ -1,0 +1,7 @@
+aptly (1.3.0+ds1-2) unstable; urgency=medium
+
+  * The database created by aptly <= 1.3.0-6 is not compatible
+    with greater versions. Users must create a new database.
+    The `aptly db recover` will not fix the issue.
+
+ -- Alexandre Viau <aviau@debian.org>  Fri, 26 Oct 2018 13:20:53 -0400
