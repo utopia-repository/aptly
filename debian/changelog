@@ -1,3 +1,14 @@
+aptly (1.3.0+ds1-2.1) unstable; urgency=medium
+
+  [ Shengjing Zhu ]
+  * Non-maintainer upload.
+  * Add patch to fix UUID struct field not encoded in msgpack (Closes: #923866)
+
+  [ Tobias Frost ]
+  * Prepare upload.
+
+ -- Tobias Frost <tobi@debian.org>  Fri, 05 Apr 2019 17:19:14 +0200
+
 aptly (1.3.0+ds1-2) unstable; urgency=medium
 
   * Add NEWS to warn about database compatibility.

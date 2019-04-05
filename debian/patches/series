@@ -1,3 +1,4 @@
 
 kjk-lzma.patch
 pborman-uuid.patch
+Fix-UUID-struct-field-not-encoded-in-msgpack.patch
