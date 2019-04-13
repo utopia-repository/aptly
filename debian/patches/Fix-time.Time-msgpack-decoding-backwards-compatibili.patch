@@ -1,0 +1,40 @@
+From: Shengjing Zhu <zhsj@debian.org>
+Date: Sat, 13 Apr 2019 22:57:46 +0800
+Subject: Fix time.Time msgpack decoding backwards compatibility
+
+This allows aptly to decode DB created by old codec library.
+
+Forwarded: https://github.com/aptly-dev/aptly/pull/830
+---
+ deb/remote.go   | 3 ++-
+ deb/snapshot.go | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/deb/remote.go b/deb/remote.go
+index 167d45f..71eb984 100644
+--- a/deb/remote.go
++++ b/deb/remote.go
+@@ -600,7 +600,8 @@ func (repo *RemoteRepo) Decode(input []byte) error {
+ 	decoder := codec.NewDecoderBytes(input, &codec.MsgpackHandle{})
+ 	err := decoder.Decode(repo)
+ 	if err != nil {
+-		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") {
++		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") ||
++			strings.Contains(err.Error(), "invalid length of bytes for decoding time") {
+ 			// probably it is broken DB from go < 1.2, try decoding w/o time.Time
+ 			var repo11 struct { // nolint: maligned
+ 				UUID             string
+diff --git a/deb/snapshot.go b/deb/snapshot.go
+index fc7689c..feef44a 100644
+--- a/deb/snapshot.go
++++ b/deb/snapshot.go
+@@ -140,7 +140,8 @@ func (s *Snapshot) Decode(input []byte) error {
+ 	decoder := codec.NewDecoderBytes(input, &codec.MsgpackHandle{})
+ 	err := decoder.Decode(s)
+ 	if err != nil {
+-		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") {
++		if strings.HasPrefix(err.Error(), "codec.decoder: readContainerLen: Unrecognized descriptor byte: hex: 80") ||
++			strings.Contains(err.Error(), "invalid length of bytes for decoding time") {
+ 			// probably it is broken DB from go < 1.2, try decoding w/o time.Time
+ 			var snapshot11 struct {
+ 				UUID      string

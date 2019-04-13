@@ -2,3 +2,4 @@
 kjk-lzma.patch
 pborman-uuid.patch
 Fix-UUID-struct-field-not-encoded-in-msgpack.patch
+Fix-time.Time-msgpack-decoding-backwards-compatibili.patch
