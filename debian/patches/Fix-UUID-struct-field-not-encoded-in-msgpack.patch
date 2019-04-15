@@ -13,7 +13,7 @@ Forwarded: no
  2 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/deb/local.go b/deb/local.go
-index e9fa17c..79cc308 100644
+index e9fa17c..fb3e404 100644
 --- a/deb/local.go
 +++ b/deb/local.go
 @@ -14,7 +14,7 @@ import (
@@ -30,7 +30,7 @@ index e9fa17c..79cc308 100644
  	DefaultComponent string `codec:",omitempty"`
  	// Uploaders configuration
 -	Uploaders *Uploaders `code:",omitempty" json:"-"`
-+	Uploaders *Uploaders `code:"Uploaders,omitempty" json:"-"`
++	Uploaders *Uploaders `codec:"Uploaders,omitempty" json:"-"`
  	// "Snapshot" of current list of packages
  	packageRefs *PackageRefList
  }
