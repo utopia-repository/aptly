@@ -1,3 +1,12 @@
+aptly (1.3.0+ds1-2.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Add patch to fix DB backwards compatibility (Closes: #911924)
+  * Fix struct field tag typo
+  * Update debian/NEWS about DB compatibility
+
+ -- Shengjing Zhu <zhsj@debian.org>  Tue, 16 Apr 2019 00:18:23 +0800
+
 aptly (1.3.0+ds1-2.1) unstable; urgency=medium
 
   [ Shengjing Zhu ]
