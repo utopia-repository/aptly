@@ -1,5 +1,10 @@
 GOVERSION=$(shell go version | awk '{print $$3;}')
-VERSION=$(shell git describe --tags | sed 's@^v@@' | sed 's@-@+@g')
+ifdef TRAVIS_TAG
+	TAG=$(TRAVIS_TAG)
+else
+	TAG="$(shell git describe --tags)"
+endif
+VERSION=$(shell echo $(TAG) | sed 's@^v@@' | sed 's@-@+@g')
 PACKAGES=context database deb files gpg http query swift s3 utils
 PYTHON?=python
 TESTS?=
@@ -8,7 +13,7 @@ RUN_LONG_TESTS?=yes
 
 GO_1_10_AND_HIGHER=$(shell (printf '%s\n' go1.10 $(GOVERSION) | sort -cV >/dev/null 2>&1) && echo "yes")
 
-all: test check system-test
+all: test bench check system-test
 
 prepare:
 	go get -u github.com/alecthomas/gometalinter
@@ -52,18 +57,27 @@ else
 	go test -v `go list ./... | grep -v vendor/` -gocheck.v=true
 endif
 
+bench:
+	go test -v ./deb -run=nothing -bench=. -benchmem 
+
 mem.png: mem.dat mem.gp
 	gnuplot mem.gp
 	open mem.png
 
-goxc:
+goxc: dev
 	rm -rf root/
 	mkdir -p root/usr/share/man/man1/ root/etc/bash_completion.d/ root/usr/share/zsh/vendor-completions/
 	cp man/aptly.1 root/usr/share/man/man1
 	cp completion.d/aptly root/etc/bash_completion.d/
 	cp completion.d/_aptly root/usr/share/zsh/vendor-completions/
 	gzip root/usr/share/man/man1/aptly.1
-	goxc -pv=$(VERSION) -max-processors=4 $(GOXC_OPTS)
+	goxc -pv=$(VERSION) -max-processors=2 $(GOXC_OPTS)
+
+release: GOXC_OPTS=-tasks-=bintray,go-vet,go-test,rmbin
+release: goxc
+	rm -rf build/
+	mkdir -p build/
+	mv xc-out/$(VERSION)/aptly_$(VERSION)_* build/
 
 man:
 	make -C man
@@ -71,4 +85,4 @@ man:
 version:
 	@echo $(VERSION)
 
-.PHONY: man version
+.PHONY: man version release goxc

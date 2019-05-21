@@ -373,4 +373,38 @@ class UpdateMirror22Test(BaseTest):
         "aptly mirror create --keyring=aptlytest.gpg --filter=nomatch libnvidia-container https://nvidia.github.io/libnvidia-container/ubuntu16.04/amd64 ./"
     ]
     runCmd = "aptly mirror update --keyring=aptlytest.gpg libnvidia-container"
+
+    def outputMatchPrepare(_, s):
+        return re.sub(r'Signature made .* using|Packages filtered: .* -> 0.', '', s)
+
+
+class UpdateMirror23Test(BaseTest):
+    """
+    update mirrors: update with installer
+    """
+    longTest = False
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly -architectures=s390x mirror create -keyring=aptlytest.gpg -filter='installer' -with-installer wheezy http://mirror.yandex.ru/debian/ wheezy main non-free",
+    ]
+    runCmd = "aptly mirror update -keyring=aptlytest.gpg wheezy"
     outputMatchPrepare = filterOutSignature
+
+    def output_processor(self, output):
+        return "\n".join(sorted(output.split("\n")))
+
+
+class UpdateMirror24Test(BaseTest):
+    """
+    update mirrors: update with installer with separate gpg file
+    """
+    longTest = False
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly -architectures=amd64 mirror create -keyring=aptlytest.gpg -filter='installer' -with-installer trusty http://mirror.yandex.ru/ubuntu/ trusty main restricted",
+    ]
+    runCmd = "aptly mirror update -keyring=aptlytest.gpg trusty"
+    outputMatchPrepare = filterOutSignature
+
+    def output_processor(self, output):
+        return "\n".join(sorted(output.split("\n")))

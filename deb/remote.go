@@ -3,6 +3,7 @@ package deb
 import (
 	"bytes"
 	gocontext "context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -20,7 +21,7 @@ import (
 	"github.com/aptly-dev/aptly/http"
 	"github.com/aptly-dev/aptly/pgp"
 	"github.com/aptly-dev/aptly/utils"
-	"github.com/smira/go-uuid/uuid"
+	"github.com/pborman/uuid"
 	"github.com/ugorji/go/codec"
 )
 
@@ -68,6 +69,8 @@ type RemoteRepo struct {
 	DownloadSources bool
 	// Should we download .udebs?
 	DownloadUdebs bool
+	// Should we download installer files?
+	DownloadInstaller bool
 	// "Snapshot" of current list of packages
 	packageRefs *PackageRefList
 	// Parsed archived root
@@ -78,16 +81,17 @@ type RemoteRepo struct {
 
 // NewRemoteRepo creates new instance of Debian remote repository with specified params
 func NewRemoteRepo(name string, archiveRoot string, distribution string, components []string,
-	architectures []string, downloadSources bool, downloadUdebs bool) (*RemoteRepo, error) {
+	architectures []string, downloadSources bool, downloadUdebs bool, downloadInstaller bool) (*RemoteRepo, error) {
 	result := &RemoteRepo{
-		UUID:            uuid.New(),
-		Name:            name,
-		ArchiveRoot:     archiveRoot,
-		Distribution:    distribution,
-		Components:      components,
-		Architectures:   architectures,
-		DownloadSources: downloadSources,
-		DownloadUdebs:   downloadUdebs,
+		UUID:              uuid.New(),
+		Name:              name,
+		ArchiveRoot:       archiveRoot,
+		Distribution:      distribution,
+		Components:        components,
+		Architectures:     architectures,
+		DownloadSources:   downloadSources,
+		DownloadUdebs:     downloadUdebs,
+		DownloadInstaller: downloadInstaller,
 	}
 
 	err := result.prepare()
@@ -139,6 +143,9 @@ func (repo *RemoteRepo) String() string {
 	}
 	if repo.DownloadUdebs {
 		srcFlag += " [udeb]"
+	}
+	if repo.DownloadInstaller {
+		srcFlag += " [installer]"
 	}
 	distribution := repo.Distribution
 	if distribution == "" {
@@ -243,6 +250,12 @@ func (repo *RemoteRepo) UdebPath(component string, architecture string) string {
 	return fmt.Sprintf("%s/debian-installer/binary-%s/Packages", component, architecture)
 }
 
+// InstallerPath returns path of Packages files for given component and
+// architecture
+func (repo *RemoteRepo) InstallerPath(component string, architecture string) string {
+	return fmt.Sprintf("%s/installer-%s/current/images/SHA256SUMS", component, architecture)
+}
+
 // PackageURL returns URL of package file relative to repository root
 // architecture
 func (repo *RemoteRepo) PackageURL(filename string) *url.URL {
@@ -311,8 +324,8 @@ ok:
 
 	defer release.Close()
 
-	sreader := NewControlFileReader(release)
-	stanza, err := sreader.ReadStanza(true)
+	sreader := NewControlFileReader(release, true, false)
+	stanza, err := sreader.ReadStanza()
 	if err != nil {
 		return err
 	}
@@ -409,7 +422,7 @@ ok:
 }
 
 // DownloadPackageIndexes downloads & parses package index files
-func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.Downloader, collectionFactory *CollectionFactory,
+func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.Downloader, verifier pgp.Verifier, collectionFactory *CollectionFactory,
 	ignoreMismatch bool, maxTries int) error {
 	if repo.packageList != nil {
 		panic("packageList != nil")
@@ -420,39 +433,85 @@ func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.
 	packagesPaths := [][]string{}
 
 	if repo.IsFlat() {
-		packagesPaths = append(packagesPaths, []string{repo.FlatBinaryPath(), PackageTypeBinary})
+		packagesPaths = append(packagesPaths, []string{repo.FlatBinaryPath(), PackageTypeBinary, "", ""})
 		if repo.DownloadSources {
-			packagesPaths = append(packagesPaths, []string{repo.FlatSourcesPath(), PackageTypeSource})
+			packagesPaths = append(packagesPaths, []string{repo.FlatSourcesPath(), PackageTypeSource, "", ""})
 		}
 	} else {
 		for _, component := range repo.Components {
 			for _, architecture := range repo.Architectures {
-				packagesPaths = append(packagesPaths, []string{repo.BinaryPath(component, architecture), PackageTypeBinary})
+				packagesPaths = append(packagesPaths, []string{repo.BinaryPath(component, architecture), PackageTypeBinary, component, architecture})
 				if repo.DownloadUdebs {
-					packagesPaths = append(packagesPaths, []string{repo.UdebPath(component, architecture), PackageTypeUdeb})
+					packagesPaths = append(packagesPaths, []string{repo.UdebPath(component, architecture), PackageTypeUdeb, component, architecture})
+				}
+				if repo.DownloadInstaller {
+					packagesPaths = append(packagesPaths, []string{repo.InstallerPath(component, architecture), PackageTypeInstaller, component, architecture})
 				}
 			}
 			if repo.DownloadSources {
-				packagesPaths = append(packagesPaths, []string{repo.SourcesPath(component), PackageTypeSource})
+				packagesPaths = append(packagesPaths, []string{repo.SourcesPath(component), PackageTypeSource, component, "source"})
 			}
 		}
 	}
 
 	for _, info := range packagesPaths {
-		path, kind := info[0], info[1]
+		path, kind, component, architecture := info[0], info[1], info[2], info[3]
 		packagesReader, packagesFile, err := http.DownloadTryCompression(gocontext.TODO(), d, repo.IndexesRootURL(), path, repo.ReleaseFiles, ignoreMismatch, maxTries)
+
+		isInstaller := kind == PackageTypeInstaller
 		if err != nil {
-			return err
+			if _, ok := err.(*http.NoCandidateFoundError); isInstaller && ok {
+				// checking if gpg file is only needed when checksums matches are required.
+				// otherwise there actually has been no candidate found and we can continue
+				if ignoreMismatch {
+					continue
+				}
+
+				// some repos do not have installer hashsum file listed in release file but provide a separate gpg file
+				hashsumPath := repo.IndexesRootURL().ResolveReference(&url.URL{Path: path}).String()
+				packagesFile, err = http.DownloadTemp(gocontext.TODO(), d, hashsumPath)
+				if err != nil {
+					if herr, ok := err.(*http.Error); ok && (herr.Code == 404 || herr.Code == 403) {
+						// installer files are not available in all components and architectures
+						// so ignore it if not found
+						continue
+					}
+
+					return err
+				}
+
+				if verifier != nil {
+					hashsumGpgPath := repo.IndexesRootURL().ResolveReference(&url.URL{Path: path + ".gpg"}).String()
+					var filesig *os.File
+					filesig, err = http.DownloadTemp(gocontext.TODO(), d, hashsumGpgPath)
+					if err != nil {
+						return err
+					}
+
+					err = verifier.VerifyDetachedSignature(filesig, packagesFile, false)
+					if err != nil {
+						return err
+					}
+
+					_, err = packagesFile.Seek(0, 0)
+				}
+
+				packagesReader = packagesFile
+			}
+
+			if err != nil {
+				return err
+			}
 		}
 		defer packagesFile.Close()
 
 		stat, _ := packagesFile.Stat()
 		progress.InitBar(stat.Size(), true)
 
-		sreader := NewControlFileReader(packagesReader)
+		sreader := NewControlFileReader(packagesReader, false, isInstaller)
 
 		for {
-			stanza, err := sreader.ReadStanza(false)
+			stanza, err := sreader.ReadStanza()
 			if err != nil {
 				return err
 			}
@@ -474,14 +533,17 @@ func (repo *RemoteRepo) DownloadPackageIndexes(progress aptly.Progress, d aptly.
 				if err != nil {
 					return err
 				}
-			}
-			err = repo.packageList.Add(p)
-			if err != nil {
-				if _, ok := err.(*PackageConflictError); ok {
-					progress.ColoredPrintf("@y[!]@| @!skipping package %s: duplicate in packages index@|", p)
-				} else {
+			} else if kind == PackageTypeInstaller {
+				p, err = NewInstallerPackageFromControlFile(stanza, repo, component, architecture, d)
+				if err != nil {
 					return err
 				}
+			}
+			err = repo.packageList.Add(p)
+			if _, ok := err.(*PackageConflictError); ok {
+				progress.ColoredPrintf("@y[!]@| @!skipping package %s: duplicate in packages index@|", p)
+			} else if err != nil {
+				return err
 			}
 		}
 
@@ -654,46 +716,68 @@ func (repo *RemoteRepo) RefKey() []byte {
 // RemoteRepoCollection does listing, updating/adding/deleting of RemoteRepos
 type RemoteRepoCollection struct {
 	*sync.RWMutex
-	db   database.Storage
-	list []*RemoteRepo
+	db    database.Storage
+	cache map[string]*RemoteRepo
 }
 
 // NewRemoteRepoCollection loads RemoteRepos from DB and makes up collection
 func NewRemoteRepoCollection(db database.Storage) *RemoteRepoCollection {
-	result := &RemoteRepoCollection{
+	return &RemoteRepoCollection{
 		RWMutex: &sync.RWMutex{},
 		db:      db,
+		cache:   make(map[string]*RemoteRepo),
 	}
+}
 
-	blobs := db.FetchByPrefix([]byte("R"))
-	result.list = make([]*RemoteRepo, 0, len(blobs))
-
-	for _, blob := range blobs {
-		r := &RemoteRepo{}
-		if err := r.Decode(blob); err != nil {
-			log.Printf("Error decoding mirror: %s\n", err)
-		} else {
-			result.list = append(result.list, r)
+func (collection *RemoteRepoCollection) search(filter func(*RemoteRepo) bool, unique bool) []*RemoteRepo {
+	result := []*RemoteRepo(nil)
+	for _, r := range collection.cache {
+		if filter(r) {
+			result = append(result, r)
 		}
 	}
+
+	if unique && len(result) > 0 {
+		return result
+	}
+
+	collection.db.ProcessByPrefix([]byte("R"), func(key, blob []byte) error {
+		r := &RemoteRepo{}
+		if err := r.Decode(blob); err != nil {
+			log.Printf("Error decoding remote repo: %s\n", err)
+			return nil
+		}
+
+		if filter(r) {
+			if _, exists := collection.cache[r.UUID]; !exists {
+				collection.cache[r.UUID] = r
+				result = append(result, r)
+				if unique {
+					return errors.New("abort")
+				}
+			}
+		}
+
+		return nil
+	})
 
 	return result
 }
 
 // Add appends new repo to collection and saves it
 func (collection *RemoteRepoCollection) Add(repo *RemoteRepo) error {
-	for _, r := range collection.list {
-		if r.Name == repo.Name {
-			return fmt.Errorf("mirror with name %s already exists", repo.Name)
-		}
+	_, err := collection.ByName(repo.Name)
+
+	if err == nil {
+		return fmt.Errorf("mirror with name %s already exists", repo.Name)
 	}
 
-	err := collection.Update(repo)
+	err = collection.Update(repo)
 	if err != nil {
 		return err
 	}
 
-	collection.list = append(collection.list, repo)
+	collection.cache[repo.UUID] = repo
 	return nil
 }
 
@@ -728,58 +812,65 @@ func (collection *RemoteRepoCollection) LoadComplete(repo *RemoteRepo) error {
 
 // ByName looks up repository by name
 func (collection *RemoteRepoCollection) ByName(name string) (*RemoteRepo, error) {
-	for _, r := range collection.list {
-		if r.Name == name {
-			return r, nil
-		}
+	result := collection.search(func(r *RemoteRepo) bool { return r.Name == name }, true)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("mirror with name %s not found", name)
 	}
-	return nil, fmt.Errorf("mirror with name %s not found", name)
+
+	return result[0], nil
 }
 
 // ByUUID looks up repository by uuid
 func (collection *RemoteRepoCollection) ByUUID(uuid string) (*RemoteRepo, error) {
-	for _, r := range collection.list {
-		if r.UUID == uuid {
-			return r, nil
-		}
+	if r, ok := collection.cache[uuid]; ok {
+		return r, nil
 	}
-	return nil, fmt.Errorf("mirror with uuid %s not found", uuid)
+
+	key := (&RemoteRepo{UUID: uuid}).Key()
+
+	value, err := collection.db.Get(key)
+	if err == database.ErrNotFound {
+		return nil, fmt.Errorf("mirror with uuid %s not found", uuid)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	r := &RemoteRepo{}
+	err = r.Decode(value)
+
+	if err == nil {
+		collection.cache[r.UUID] = r
+	}
+
+	return r, err
 }
 
 // ForEach runs method for each repository
 func (collection *RemoteRepoCollection) ForEach(handler func(*RemoteRepo) error) error {
-	var err error
-	for _, r := range collection.list {
-		err = handler(r)
-		if err != nil {
-			return err
+	return collection.db.ProcessByPrefix([]byte("R"), func(key, blob []byte) error {
+		r := &RemoteRepo{}
+		if err := r.Decode(blob); err != nil {
+			log.Printf("Error decoding mirror: %s\n", err)
+			return nil
 		}
-	}
-	return err
+
+		return handler(r)
+	})
 }
 
 // Len returns number of remote repos
 func (collection *RemoteRepoCollection) Len() int {
-	return len(collection.list)
+	return len(collection.db.KeysByPrefix([]byte("R")))
 }
 
 // Drop removes remote repo from collection
 func (collection *RemoteRepoCollection) Drop(repo *RemoteRepo) error {
-	repoPosition := -1
-
-	for i, r := range collection.list {
-		if r == repo {
-			repoPosition = i
-			break
-		}
-	}
-
-	if repoPosition == -1 {
+	if _, err := collection.db.Get(repo.Key()); err == database.ErrNotFound {
 		panic("repo not found!")
 	}
 
-	collection.list[len(collection.list)-1], collection.list[repoPosition], collection.list =
-		nil, collection.list[len(collection.list)-1], collection.list[:len(collection.list)-1]
+	delete(collection.cache, repo.UUID)
 
 	err := collection.db.Delete(repo.Key())
 	if err != nil {
