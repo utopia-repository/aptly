@@ -15,8 +15,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/aptly-dev/aptly/pgp"
+	"github.com/kjk/lzma"
 	"github.com/smira/go-xz"
-	"github.com/smira/lzma"
 )
 
 // Source kinds
@@ -25,6 +25,8 @@ const (
 	SourceLocalRepo  = "local"
 	SourceRemoteRepo = "repo"
 )
+
+type parseQuery func(string) (PackageQuery, error)
 
 // GetControlFileFromDeb reads control file from deb package
 func GetControlFileFromDeb(packageFile string) (Stanza, error) {
@@ -87,8 +89,8 @@ func GetControlFileFromDeb(packageFile string) (Stanza, error) {
 				}
 
 				if tarHeader.Name == "./control" || tarHeader.Name == "control" {
-					reader := NewControlFileReader(untar)
-					stanza, err := reader.ReadStanza(false)
+					reader := NewControlFileReader(untar, false, false)
+					stanza, err := reader.ReadStanza()
 					if err != nil {
 						return nil, err
 					}
@@ -127,8 +129,8 @@ func GetControlFileFromDsc(dscFile string, verifier pgp.Verifier) (Stanza, error
 		text = file
 	}
 
-	reader := NewControlFileReader(text)
-	stanza, err := reader.ReadStanza(false)
+	reader := NewControlFileReader(text, false, false)
+	stanza, err := reader.ReadStanza()
 	if err != nil {
 		return nil, err
 	}

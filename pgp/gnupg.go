@@ -3,6 +3,7 @@ package pgp
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,6 +22,7 @@ var (
 // GpgSigner is implementation of Signer interface using gpg as external program
 type GpgSigner struct {
 	gpg                        string
+	version                    GPGVersion
 	keyRef                     string
 	keyring, secretKeyring     string
 	passphrase, passphraseFile string
@@ -52,7 +54,7 @@ func (g *GpgSigner) gpgArgs() []string {
 	if g.keyring != "" {
 		args = append(args, "--no-auto-check-trustdb", "--no-default-keyring", "--keyring", g.keyring)
 	}
-	if g.secretKeyring != "" {
+	if g.secretKeyring != "" && g.version == GPG1x {
 		args = append(args, "--secret-keyring", g.secretKeyring)
 	}
 
@@ -61,7 +63,9 @@ func (g *GpgSigner) gpgArgs() []string {
 	}
 
 	if g.passphrase != "" || g.passphraseFile != "" {
-		args = append(args, "--no-use-agent")
+		if g.version == GPG1x {
+			args = append(args, "--no-use-agent")
+		}
 	}
 
 	if g.passphrase != "" {
@@ -74,53 +78,21 @@ func (g *GpgSigner) gpgArgs() []string {
 
 	if g.batch {
 		args = append(args, "--no-tty", "--batch")
+		if g.version == GPG21xPlus {
+			args = append(args, "--pinentry-mode", "loopback")
+		}
 	}
 
 	return args
 }
 
-func cliVersionCheck(cmd string, marker string) bool {
-	output, err := exec.Command(cmd, "--version").CombinedOutput()
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(output), marker)
-}
-
-func findSuitableCLI(cmds []string, versionMarker string) string {
-	for _, cmd := range cmds {
-		if cliVersionCheck(cmd, versionMarker) {
-			return cmd
-		}
-	}
-	return ""
-}
-
-// We only support gpg1 at this time. Make sure we find a suitable binary.
-func findGPG1() (string, error) {
-	cmd := findSuitableCLI([]string{"gpg", "gpg1"}, "gpg (GnuPG) 1.")
-	if cmd != "" {
-		return cmd, nil
-	}
-	return "", fmt.Errorf("Couldn't find a suitable gpg executable. Make sure gnupg1 is available as either gpg or gpg1 in $PATH")
-}
-
-// We only support gpgv1 at this time. Make sure we find a suitable binary.
-func findGPGV1() (string, error) {
-	cmd := findSuitableCLI([]string{"gpgv", "gpgv1"}, "gpgv (GnuPG) 1.")
-	if cmd != "" {
-		return cmd, nil
-	}
-	return "", fmt.Errorf("Couldn't find a suitable gpgv executable. Make sure gpgv1 is available as either gpgv or gpgv1 in $PATH")
-}
-
 // NewGpgSigner creates a new gpg signer
-func NewGpgSigner() *GpgSigner {
-	gpg, err := findGPG1()
+func NewGpgSigner(finder GPGFinder) *GpgSigner {
+	gpg, version, err := finder.FindGPG()
 	if err != nil {
 		panic(err)
 	}
-	return &GpgSigner{gpg: gpg}
+	return &GpgSigner{gpg: gpg, version: version}
 }
 
 // Init verifies availability of gpg & presence of keys
@@ -168,38 +140,31 @@ func (g *GpgSigner) ClearSign(source string, destination string) error {
 type GpgVerifier struct {
 	gpg      string
 	gpgv     string
+	version  GPGVersion
 	keyRings []string
 }
 
-// NewGpgVerifier creates a new gpg signer
-func NewGpgVerifier() *GpgVerifier {
-	gpg, err := findGPG1()
+// NewGpgVerifier creates a new gpg verifier
+func NewGpgVerifier(finder GPGFinder) *GpgVerifier {
+	gpg, versionGPG, err := finder.FindGPG()
 	if err != nil {
 		panic(err)
 	}
 
-	gpgv, err := findGPGV1()
+	gpgv, versionGPGV, err := finder.FindGPGV()
 	if err != nil {
 		panic(err)
 	}
 
-	return &GpgVerifier{gpg: gpg, gpgv: gpgv}
+	if versionGPG != versionGPGV {
+		panic(errors.New("gpg and gpgv versions don't match"))
+	}
+
+	return &GpgVerifier{gpg: gpg, gpgv: gpgv, version: versionGPG}
 }
 
 // InitKeyring verifies that gpg is installed and some keys are trusted
 func (g *GpgVerifier) InitKeyring() error {
-	cmd, err := findGPG1()
-	if err != nil {
-		return err
-	}
-	g.gpg = cmd
-
-	cmd, err = findGPGV1()
-	if err != nil {
-		return err
-	}
-	g.gpgv = cmd
-
 	if len(g.keyRings) == 0 {
 		// using default keyring
 		output, err := exec.Command(g.gpg, "--no-default-keyring", "--no-auto-check-trustdb", "--keyring", "trustedkeys.gpg", "--list-keys").Output()

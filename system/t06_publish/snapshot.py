@@ -67,9 +67,9 @@ class PublishSnapshot1Test(BaseTest):
         self.check_file_contents('public/dists/maverick/main/Contents-amd64.gz', 'contents_amd64', match_prepare=ungzip_if_required)
 
         # verify signatures
-        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
-        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
                       os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
 
@@ -79,6 +79,10 @@ class PublishSnapshot1Test(BaseTest):
         pathsSeen = set()
         for l in release:
             fileHash, fileSize, path = l.split()
+            if "Contents" in path and not path.endswith(".gz"):
+                # "Contents" are present in index, but not really written to disk
+                continue
+
             pathsSeen.add(path)
 
             fileSize = int(fileSize)
@@ -451,9 +455,9 @@ class PublishSnapshot16Test(BaseTest):
         self.check_file_contents('public/dists/maverick/main/source/Sources', 'sources', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
 
         # verify signatures
-        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
-        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
                       os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
 
@@ -498,9 +502,9 @@ class PublishSnapshot17Test(BaseTest):
         self.check_file_contents('public/dists/maverick/main/binary-i386/Packages', 'binary', match_prepare=lambda s: "\n".join(sorted(s.split("\n"))))
 
         # verify signatures
-        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
-        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
                       os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
 
@@ -712,9 +716,9 @@ class PublishSnapshot26Test(BaseTest):
         self.check_file_contents('public/dists/maverick/Release', 'release', match_prepare=strip_processor)
 
         # verify signatures
-        self.run_cmd(["gpg", "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb", "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/InRelease')])
-        self.run_cmd(["gpg", "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
+        self.run_cmd([self.gpgFinder.gpg, "--no-auto-check-trustdb",  "--keyring", os.path.join(os.path.dirname(inspect.getsourcefile(BaseTest)), "files", "aptly.pub"),
                       "--verify", os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release.gpg'),
                       os.path.join(os.environ["HOME"], ".aptly", 'public/dists/maverick/Release')])
 
@@ -724,6 +728,10 @@ class PublishSnapshot26Test(BaseTest):
         pathsSeen = set()
         for l in release:
             fileHash, fileSize, path = l.split()
+            if "Contents" in path and not path.endswith(".gz"):
+                # "Contents" are present in index, but not really written to disk
+                continue
+
             pathsSeen.add(path)
 
             fileSize = int(fileSize)
@@ -947,6 +955,10 @@ class PublishSnapshot35Test(BaseTest):
         pathsSeen = set()
         for l in release:
             fileHash, fileSize, path = l.split()
+            if "Contents" in path and not path.endswith(".gz"):
+                # "Contents" are present in index, but not really written to disk
+                continue
+
             pathsSeen.add(path)
 
             fileSize = int(fileSize)
@@ -1021,3 +1033,26 @@ class PublishSnapshot37Test(BaseTest):
     ]
     runCmd = "aptly publish snapshot -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec wheezy"
     gold_processor = BaseTest.expand_environ
+
+
+class PublishSnapshot38Test(BaseTest):
+    """
+    publish snapshot: mirror with installer
+    """
+    fixtureGpg = True
+    fixtureCmds = [
+        "aptly -architectures=s390x mirror create -keyring=aptlytest.gpg -filter='installer' -with-installer wheezy http://mirror.yandex.ru/debian/ wheezy main",
+        "aptly mirror update -keyring=aptlytest.gpg wheezy",
+        "aptly snapshot create wheezy from mirror wheezy",
+    ]
+    runCmd = "aptly publish snapshot -keyring=${files}/aptly.pub -secret-keyring=${files}/aptly.sec wheezy"
+    gold_processor = BaseTest.expand_environ
+
+    def check(self):
+        super(PublishSnapshot38Test, self).check()
+        self.check_exists('public/dists/wheezy/main/installer-s390x/current/images/SHA256SUMS')
+        self.check_exists('public/dists/wheezy/main/installer-s390x/current/images/SHA256SUMS.gpg')
+        self.check_exists('public/dists/wheezy/main/installer-s390x/current/images/generic/debian.exec')
+        self.check_exists('public/dists/wheezy/main/installer-s390x/current/images/MANIFEST')
+
+        self.check_file_contents('public/dists/wheezy/main/installer-s390x/current/images/SHA256SUMS', "installer_s390x", match_prepare=sorted_processor)

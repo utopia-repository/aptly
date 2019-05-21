@@ -2,6 +2,7 @@ package deb
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/aptly-dev/aptly/database"
 
@@ -17,7 +18,7 @@ var _ = Suite(&SnapshotSuite{})
 
 func (s *SnapshotSuite) SetUpTest(c *C) {
 	s.SetUpPackages()
-	s.repo, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
+	s.repo, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false, false)
 	s.repo.packageRefs = s.reflist
 }
 
@@ -116,11 +117,11 @@ func (s *SnapshotCollectionSuite) SetUpTest(c *C) {
 	s.collection = NewSnapshotCollection(s.db)
 	s.SetUpPackages()
 
-	s.repo1, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false)
+	s.repo1, _ = NewRemoteRepo("yandex", "http://mirror.yandex.ru/debian/", "squeeze", []string{"main"}, []string{}, false, false, false)
 	s.repo1.packageRefs = s.reflist
 	s.snapshot1, _ = NewSnapshotFromRepository("snap1", s.repo1)
 
-	s.repo2, _ = NewRemoteRepo("android", "http://mirror.yandex.ru/debian/", "lenny", []string{"main"}, []string{}, false, false)
+	s.repo2, _ = NewRemoteRepo("android", "http://mirror.yandex.ru/debian/", "lenny", []string{"main"}, []string{}, false, false, false)
 	s.repo2.packageRefs = s.reflist
 	s.snapshot2, _ = NewSnapshotFromRepository("snap2", s.repo2)
 
@@ -158,6 +159,10 @@ func (s *SnapshotCollectionSuite) TestAddByNameByUUID(c *C) {
 	snapshot, err = collection.ByUUID(s.snapshot1.UUID)
 	c.Assert(err, IsNil)
 	c.Assert(snapshot.String(), Equals, s.snapshot1.String())
+
+	snapshot, err = collection.ByUUID(s.snapshot2.UUID)
+	c.Assert(err, IsNil)
+	c.Assert(snapshot.String(), Equals, s.snapshot2.String())
 }
 
 func (s *SnapshotCollectionSuite) TestUpdateLoadComplete(c *C) {
@@ -193,6 +198,23 @@ func (s *SnapshotCollectionSuite) TestForEachAndLen(c *C) {
 	c.Assert(err, Equals, e)
 }
 
+func (s *SnapshotCollectionSuite) TestForEachSorted(c *C) {
+	s.collection.Add(s.snapshot2)
+	s.collection.Add(s.snapshot1)
+	s.collection.Add(s.snapshot4)
+	s.collection.Add(s.snapshot3)
+
+	names := []string{}
+
+	err := s.collection.ForEachSorted("name", func(snapshot *Snapshot) error {
+		names = append(names, snapshot.Name)
+		return nil
+	})
+	c.Assert(err, IsNil)
+
+	c.Check(sort.StringsAreSorted(names), Equals, true)
+}
+
 func (s *SnapshotCollectionSuite) TestFindByRemoteRepoSource(c *C) {
 	c.Assert(s.collection.Add(s.snapshot1), IsNil)
 	c.Assert(s.collection.Add(s.snapshot2), IsNil)
@@ -200,7 +222,7 @@ func (s *SnapshotCollectionSuite) TestFindByRemoteRepoSource(c *C) {
 	c.Check(s.collection.ByRemoteRepoSource(s.repo1), DeepEquals, []*Snapshot{s.snapshot1})
 	c.Check(s.collection.ByRemoteRepoSource(s.repo2), DeepEquals, []*Snapshot{s.snapshot2})
 
-	repo3, _ := NewRemoteRepo("other", "http://mirror.yandex.ru/debian/", "lenny", []string{"main"}, []string{}, false, false)
+	repo3, _ := NewRemoteRepo("other", "http://mirror.yandex.ru/debian/", "lenny", []string{"main"}, []string{}, false, false, false)
 
 	c.Check(s.collection.ByRemoteRepoSource(repo3), DeepEquals, []*Snapshot(nil))
 }
@@ -230,7 +252,11 @@ func (s *SnapshotCollectionSuite) TestFindSnapshotSource(c *C) {
 	c.Assert(s.collection.Add(snapshot4), IsNil)
 	c.Assert(s.collection.Add(snapshot5), IsNil)
 
-	c.Check(s.collection.BySnapshotSource(s.snapshot1), DeepEquals, []*Snapshot{snapshot3, snapshot4})
+	list := s.collection.BySnapshotSource(s.snapshot1)
+	sorter, _ := newSnapshotSorter("name", list)
+	sort.Sort(sorter)
+
+	c.Check(sorter.list, DeepEquals, []*Snapshot{snapshot3, snapshot4})
 	c.Check(s.collection.BySnapshotSource(s.snapshot2), DeepEquals, []*Snapshot{snapshot3})
 	c.Check(s.collection.BySnapshotSource(snapshot5), DeepEquals, []*Snapshot(nil))
 }
