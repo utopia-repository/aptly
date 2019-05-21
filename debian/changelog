@@ -4,6 +4,8 @@ aptly (1.4~git20190125~e2d6a53d-0utopia1~deb9u1) stretch; urgency=medium
   * New upstream snapshot.
     - Add native support for gpg2 (GH-779)
   * Loosen gnupg depends: use D: gnupg | gnupg1, gpgv | gpgv1
+  * Add B-D: golang-github-kjk-lzma-dev, golang-github-pborman-uuid-dev
+  * Add B-D: golang-any (>= 2:1.9~) as aptly requires at least Go 1.9
 
  -- James Lu <james@overdrivenetworks.com>  Tue, 21 May 2019 11:26:22 +0800
 
