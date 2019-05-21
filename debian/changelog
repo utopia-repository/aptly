@@ -3,6 +3,7 @@ aptly (1.4~git20190125~e2d6a53d-0utopia1~deb9u1) UNRELEASED; urgency=medium
   * Utopia Repository upload.
   * New upstream snapshot.
     - Add native support for gpg2 (GH-779)
+  * Loosen gnupg depends: use D: gnupg | gnupg1, gpgv | gpgv1
 
  -- James Lu <james@overdrivenetworks.com>  Mon, 20 May 2019 20:39:21 -0500
 
