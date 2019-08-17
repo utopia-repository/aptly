@@ -1,3 +1,10 @@
+aptly (1.4.0-0utopia1~deb10u1) buster; urgency=medium
+
+  * Utopia Repository upload.
+  * New upstream release.
+
+ -- James Lu <james@overdrivenetworks.com>  Sat, 17 Aug 2019 01:14:41 -0700
+
 aptly (1.4~git20190125~e2d6a53d-0utopia1~deb10u1) buster; urgency=medium
 
   * Utopia Repository upload.
